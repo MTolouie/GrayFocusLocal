@@ -1,0 +1,72 @@
+﻿<Window x:Class="Wpf.Views.ResultWindow"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        Title="Batch Analysis Results" 
+        Height="700" Width="850"
+        Background="{StaticResource WindowBackgroundBrush}"
+        WindowStartupLocation="CenterOwner">
+    <Grid Margin="15">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" 
+                   Text="Python API Batch Output Results Gallery" 
+                   Style="{StaticResource HeaderTextStyle}" 
+                   Margin="0,0,0,15" 
+                   HorizontalAlignment="Center"/>
+
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <ItemsControl ItemsSource="{Binding Items}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border Background="{StaticResource EditorBackgroundBrush}" 
+                        BorderBrush="{StaticResource BorderBrush}" 
+                        BorderThickness="1" 
+                        CornerRadius="6" 
+                        Margin="0,0,0,20" 
+                        Padding="10">
+                            <StackPanel>
+                                <TextBlock Text="{Binding Label}" 
+                                   Style="{StaticResource SubHeaderTextStyle}" 
+                                   Margin="5,0,0,10" 
+                                   Foreground="{StaticResource MutedTextBrush}"/>
+
+                                <TextBlock Text="⏳ Loading preview..."
+                                   HorizontalAlignment="Center"
+                                   Foreground="{StaticResource MutedTextBrush}"
+                                   Margin="0,20">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsLoading}" Value="False">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+
+                                <Image Source="{Binding ImageSource}" 
+       Stretch="Uniform" MaxHeight="500" 
+       HorizontalAlignment="Center">
+                                    <Image.Style>
+                                        <Style TargetType="Image">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsLoading}" Value="False">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Image.Style>
+                                </Image>
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+    </Grid>
+</Window>
