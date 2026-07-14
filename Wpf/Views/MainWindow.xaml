@@ -11,6 +11,9 @@
         Height="800" Width="1100"
         Background="{StaticResource WindowBackgroundBrush}"
         WindowStartupLocation="CenterScreen">
+    <Window.Resources>
+        <helpers:DecimalTextBoxConverter x:Key="DecimalConverter"/>
+    </Window.Resources>
     <Grid>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="*" />
@@ -260,21 +263,21 @@
 
                                 <StackPanel Grid.Column="0" Margin="4,0,4,0">
                                     <TextBlock Text="FOD (mm)" Foreground="{StaticResource MutedTextBrush}" Style="{StaticResource BodyTextStyle}" Margin="0,0,0,4"/>
-                                    <TextBox Text="{Binding FodValue, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                    <TextBox Text="{Binding FodValue, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged,Converter={StaticResource DecimalConverter}}"
                                              Background="#1E293B" Foreground="White" BorderBrush="{StaticResource BorderBrush}"
                                              Padding="5" Height="30" VerticalContentAlignment="Center"/>
                                 </StackPanel>
 
                                 <StackPanel Grid.Column="1" Margin="4,0,4,0">
                                     <TextBlock Text="FDD (mm)" Foreground="{StaticResource MutedTextBrush}" Style="{StaticResource BodyTextStyle}" Margin="0,0,0,4"/>
-                                    <TextBox Text="{Binding FddValue, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                    <TextBox Text="{Binding FddValue, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged,Converter={StaticResource DecimalConverter}}"
                                              Background="#1E293B" Foreground="White" BorderBrush="{StaticResource BorderBrush}"
                                              Padding="5" Height="30" VerticalContentAlignment="Center"/>
                                 </StackPanel>
 
                                 <StackPanel Grid.Column="2" Margin="4,0,4,0">
                                     <TextBlock Text="Pixel Size (µm)" Foreground="{StaticResource MutedTextBrush}" Style="{StaticResource BodyTextStyle}" Margin="0,0,0,4"/>
-                                    <TextBox Text="{Binding DetectorPixelSize, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                    <TextBox Text="{Binding DetectorPixelSize, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged,Converter={StaticResource DecimalConverter}}"
                                              Background="#1E293B" Foreground="White" BorderBrush="{StaticResource BorderBrush}"
                                              Padding="5" Height="30" VerticalContentAlignment="Center"/>
                                 </StackPanel>
