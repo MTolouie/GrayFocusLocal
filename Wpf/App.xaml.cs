@@ -1,10 +1,10 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
-using System.Configuration;
-using System.Data;
+using System;
 using System.Windows;
 using Wpf.Services;
 using Wpf.ViewModels;
 using Wpf.Services.IService;
+using Wpf.Views;
 
 namespace Wpf
 {
@@ -13,51 +13,66 @@ namespace Wpf
     /// </summary>
     public partial class App : System.Windows.Application
     {
-        private PythonBackendService? _pythonService;
+        // CHANGED: was PythonBackendService (subprocess launcher).
+        // PythonEngineService owns the embedded Python.NET runtime instead,
+        // and now lives in the DI container as a singleton so the same
+        // GrayscaleProcessor instance is shared by ImageProcessingService.
+        private PythonEngineService? _pythonEngineService;
+        private ServiceProvider? _serviceProvider;
+
         protected override void OnStartup(StartupEventArgs e)
         {
-            // 1. Always call the base method first to let WPF fire its built-in startup logic
             base.OnStartup(e);
 
-            // 2. Build the ServiceCollection right here
             var services = new ServiceCollection();
 
-            // Initialize and spin up the API background script automatically
-            _pythonService = new PythonBackendService();
-            try
-            {
-                _pythonService.StartBackend();
-            }
-            catch (System.Exception ex)
-            {
-                MessageBox.Show($"Failed to launch Python API background process: {ex.Message}", "Backend Error", MessageBoxButton.OK, MessageBoxImage.Error);
-            }
-
-            // 3. Register your Onion Architecture dependencies
-            services.AddHttpClient<IImageProcessingService, ImageProcessingService>();
+            // CHANGED: no more services.AddHttpClient<IImageProcessingService, ...>()
+            // — there's no HttpClient involved anymore. PythonEngineService is
+            // registered as a singleton (one embedded interpreter, one
+            // GrayscaleProcessor for the app's lifetime) and injected into
+            // ImageProcessingService the normal DI way.
+            services.AddSingleton<PythonEngineService>();
+            services.AddSingleton<IImageProcessingService, ImageProcessingService>();
             services.AddSingleton<IRoiProcessorService, RoiProcessorService>();
+
+            // NEW: ResultWindow/ResultViewModel need a runtime value
+            // (the batch's preview references) that the container can't
+            // supply on its own, so they're built through this factory
+            // instead of being registered directly.
+            services.AddSingleton<IResultWindowFactory, ResultWindowFactory>();
+
             services.AddTransient<MainViewModel>();
             services.AddTransient<MainWindow>();
 
-            // 4. Create the service provider local container
-            IServiceProvider serviceProvider = services.BuildServiceProvider();
+            _serviceProvider = services.BuildServiceProvider();
 
-            // 5. Ask the container to resolve the Window and ViewModel
-            var viewModel = serviceProvider.GetRequiredService<MainViewModel>();
-            var mainWindow = serviceProvider.GetRequiredService<MainWindow>();
+            // Start the embedded Python engine through the same instance the
+            // container will hand to ImageProcessingService.
+            _pythonEngineService = _serviceProvider.GetRequiredService<PythonEngineService>();
+            try
+            {
+                _pythonEngineService.StartBackend();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Failed to start the embedded Python engine: {ex.Message}", "Backend Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
 
-            // 6. Bind them together and show the UI
+            var viewModel = _serviceProvider.GetRequiredService<MainViewModel>();
+            var mainWindow = _serviceProvider.GetRequiredService<MainWindow>();
+
             mainWindow.DataContext = viewModel;
             mainWindow.Show();
         }
 
         protected override void OnExit(ExitEventArgs e)
         {
-            // Forces the port connection shut and terminates the process when the user closes the WPF Window
-            _pythonService?.StopBackend();
-            _pythonService?.Dispose();
+            // Shuts down the embedded Python interpreter cleanly instead of
+            // killing a subprocess.
+            _pythonEngineService?.StopBackend();
+            _pythonEngineService?.Dispose();
+            _serviceProvider?.Dispose();
             base.OnExit(e);
         }
     }
-
 }

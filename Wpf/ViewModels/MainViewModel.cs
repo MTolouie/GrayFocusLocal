@@ -1,16 +1,20 @@
-using Wpf.DTOs;
-using Wpf.Services.IService;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Win32;
+using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
-using Wpf.Views;
+using Wpf.DTOs;
 using Wpf.Entities;
+using Wpf.Services;
+using Wpf.Services.IService;
+using Wpf.Views;
 
 namespace Wpf.ViewModels
 {
@@ -18,9 +22,11 @@ namespace Wpf.ViewModels
     {
         private readonly IImageProcessingService _processingService;
         private readonly IRoiProcessorService _roiProcessorService;
+        private readonly IResultWindowFactory _resultWindowFactory;
 
         // The most recently computed ROI: pixel crop/mask, min/max, and the
-        // exact TIFF bytes that will be sent to the Python API unchanged.
+        // exact TIFF bytes that will be written to a temp file and handed to
+        // process_image() unchanged.
         private RoiResult? _currentRoiResult;
 
         // Cutoff Inputs
@@ -30,7 +36,13 @@ namespace Wpf.ViewModels
 
         // --- MULTI-IMAGE BATCH PROPERTIES ---
         public ObservableCollection<string> SelectedImagesQueue { get; } = new();
-        private List<string> _processedResultsPaths = new();
+
+        // CHANGED: used to store fully-formed HTTP preview URLs
+        // ("http://127.0.0.1:8000/image?session_id=...&preview_id=...").
+        // There's no server to build a URL for anymore — this now stores the
+        // (sessionId, previewId) pairs ResultViewModel needs to call
+        // GetPreviewImageAsync itself.
+        private List<(string SessionId, string PreviewId)> _processedResultsPaths = new();
 
         [ObservableProperty] private string? _imagePath;
         [ObservableProperty] private string _imageDisplayTitle = "Original Photo";
@@ -103,10 +115,14 @@ namespace Wpf.ViewModels
         partial void OnFddValueChanged(double value) => RecalculateObjectResolution();
         partial void OnDetectorPixelSizeChanged(double value) => RecalculateObjectResolution();
 
-        public MainViewModel(IImageProcessingService processingService, IRoiProcessorService roiProcessorService)
+        public MainViewModel(
+            IImageProcessingService processingService,
+            IRoiProcessorService roiProcessorService,
+            IResultWindowFactory resultWindowFactory)
         {
             _processingService = processingService;
             _roiProcessorService = roiProcessorService;
+            _resultWindowFactory = resultWindowFactory;
 
             // Field initializers (FodValue = 100.0, etc.) don't go through the
             // property setters, so the OnXChanged hooks never fire at startup.
@@ -128,7 +144,9 @@ namespace Wpf.ViewModels
             // 2. Object Pixel Size = Detector Pixel Size / M
 
             (ObjectPixelSizeMicrons, Magnification) = GetObjectPixelSizeMicrons();
-            CalculatedResolutionMessage = $"Effective Res: {ObjectPixelSizeMicrons:F2} µm/px (M: {Magnification:F2}x)";
+            var pixelSizeMicorons = ObjectPixelSizeMicrons.ToString("F2", System.Globalization.CultureInfo.InvariantCulture);
+            var magnification = Magnification.ToString("F2", System.Globalization.CultureInfo.InvariantCulture);
+            CalculatedResolutionMessage = $"Effective Res: {pixelSizeMicorons} µm/px (M: {magnification:F2}x)";
         }
 
         public (double ObjectPixelSizeMicrons, double Magnification) GetObjectPixelSizeMicrons()
@@ -156,7 +174,7 @@ namespace Wpf.ViewModels
 
             double voxelVolumeCubicMicrons = Math.Pow(ObjectPixelSizeMicrons, 3);
             double totalVolumeCubicMicrons = TotalPixelsInRange * voxelVolumeCubicMicrons;
-            double totalVolumeCubicMeters = totalVolumeCubicMicrons / 1000000000 ;
+            double totalVolumeCubicMeters = totalVolumeCubicMicrons / 1000000000;
 
             CalculatedVolumeMessage = $"Total Volume: {totalVolumeCubicMeters.ToString("F12", System.Globalization.CultureInfo.InvariantCulture)} m³ ({TotalPixelsInRange} voxels)";
         }
@@ -553,8 +571,7 @@ namespace Wpf.ViewModels
                 return;
             }
 
-            // The exact ROI image + stats computed by CalculateRegionIntensitiesAsync
-            // is what gets sent — never re-read or re-derive it here.
+            // Ensure we have an active ROI calculation to establish the target range
             if (_currentRoiResult == null || !_currentRoiResult.HasPixels)
             {
                 MessageBox.Show("Please draw a valid selection area to parse regional threshold levels first.",
@@ -588,12 +605,14 @@ namespace Wpf.ViewModels
             if (result.status != "started")
             {
                 CurrentStatusMessage = $"Something Went Wrong.";
-                ExecutionLog.Add($"❌ [Could Not Make Contact With The API.");
-                MessageBox.Show("Failed to initiate processing with the API. Please check the API server and try again.", "API Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                ExecutionLog.Add($"❌ [Could not start the local processing session. {result.message}]");
+                MessageBox.Show("Failed to initiate processing. Please check the local processing engine and try again.", "Processing Error", MessageBoxButton.OK, MessageBoxImage.Error);
                 return;
             }
 
-
+            // Capture the WPF UI thread scheduler so our progress callback can safely update properties
+            var uiScheduler = TaskScheduler.FromCurrentSynchronizationContext();
+            int imgIndex = 0;
 
             foreach (var imgPath in imagesToProcess)
             {
@@ -607,13 +626,7 @@ namespace Wpf.ViewModels
                 TempLineVisibility = Visibility.Collapsed;
 
                 ImageDisplayTitle = $"Original Photo ({currentFileName}) - {SelectedImagesQueue.Count} remaining";
-                CurrentStatusMessage = $"Encoding payload for {currentFileName}...";
-
-                byte[] fullImageBytes = Array.Empty<byte>();
-                if (File.Exists(imgPath))
-                {
-                    fullImageBytes = await File.ReadAllBytesAsync(imgPath);
-                }
+                CurrentStatusMessage = $"Processing {currentFileName} in-memory...";
 
                 bool isCompletedSuccessfully = false;
                 string? savedImagePathResult = null;
@@ -621,44 +634,32 @@ namespace Wpf.ViewModels
 
                 try
                 {
-                    await Task.Run(async () =>
+                    // 1. Create the progress callback action
+                    Action<ProcessingProgress> progressReporter = (progress) =>
                     {
-                        var streamEnumerable = _processingService.ScanImageAsync(fullImageBytes,sessionId);
-                        var enumerator = streamEnumerable.GetAsyncEnumerator();
-                        try
+                        Task.Factory.StartNew(() =>
                         {
-                            while (await enumerator.MoveNextAsync().ConfigureAwait(false))
+                            CurrentStatusMessage = progress.Message;
+                            if (progress.Status == "progress")
                             {
-                                var progress = enumerator.Current;
-
-                                System.Windows.Application.Current.Dispatcher.BeginInvoke(new Action(() =>
-                                {
-                                    CurrentStatusMessage = progress.Message;
-                                    if (progress.Status == "progress")
-                                    {
-                                        //[{currentFileName}] 
-                                        ExecutionLog.Add($"[Step {progress.Step}/{progress.TotalSteps}] {progress.Message}");
-                                    }
-                                    else if (!string.IsNullOrEmpty(progress.Message))
-                                    {
-                                        ExecutionLog.Add($"[{currentFileName}] [{progress.Status.ToUpper()}] {progress.Message}");
-                                    }
-                                }));
-
-                                if (progress.Status == "completed" && progress.Results != null)
-                                {
-                                    savedImagePathResult = progress.Results.SavedPreviewId;
-                                    targetCountResult = progress.Results.ImagePixelsInRange;
-                                    isCompletedSuccessfully = true;
-                                    break;
-                                }
+                                ExecutionLog.Add($"[Step {progress.Step}/{progress.TotalSteps}] {progress.Message}");
                             }
-                        }
-                        finally
-                        {
-                            await enumerator.DisposeAsync().ConfigureAwait(false);
-                        }
-                    }).ConfigureAwait(true);
+                            else if (!string.IsNullOrEmpty(progress.Message))
+                            {
+                                ExecutionLog.Add($"[{currentFileName}] [{progress.Status.ToUpper()}] {progress.Message}");
+                            }
+                        }, CancellationToken.None, TaskCreationOptions.None, uiScheduler);
+                    };
+
+                    // 2. ELIMINATED DISK WRITE: Pass the original imgPath direct to python backend
+                    var completed = await _processingService.ProcessImageAsync(sessionId, imgPath, imgIndex, progressReporter);
+
+                    if (completed.Status == "completed")
+                    {
+                        savedImagePathResult = completed.SavedPreviewId;
+                        targetCountResult = completed.ImagePixelsInRange;
+                        isCompletedSuccessfully = true;
+                    }
 
                     if (isCompletedSuccessfully)
                     {
@@ -669,7 +670,7 @@ namespace Wpf.ViewModels
 
                         if (!string.IsNullOrEmpty(savedImagePathResult))
                         {
-                            _processedResultsPaths.Add($"http://127.0.0.1:8000/image?session_id={sessionId}&preview_id={savedImagePathResult}");
+                            _processedResultsPaths.Add((sessionId, savedImagePathResult));
                         }
 
                         SelectedImagesQueue.Remove(imgPath);
@@ -684,6 +685,8 @@ namespace Wpf.ViewModels
                     ExecutionLog.Add($"❌ Pipeline Fault on {currentFileName}: {ex.Message}");
                     CurrentStatusMessage = $"Processing error on {currentFileName}.";
                 }
+
+                imgIndex++;
             }
 
             // Once the batch run is complete
@@ -701,22 +704,22 @@ namespace Wpf.ViewModels
 
                 ClearSelectionAndShapes();
 
-                var resultWin = new ResultWindow(_processedResultsPaths);
+                var resultWin = _resultWindowFactory.Create(_processedResultsPaths);
                 resultWin.Owner = System.Windows.Application.Current.MainWindow;
-                
-                // CRITICAL: Clean up the server's RAM exactly when the user is done viewing the previews
+
+                // Clean up the Python session's in-memory state when the user is done viewing
                 resultWin.Closed += async (s, e) =>
                 {
                     try
                     {
-                       await _processingService.CleanUpDataAsync(sessionId);
+                        await _processingService.CleanUpDataAsync(sessionId);
                     }
                     catch (Exception ex)
                     {
-                        System.Diagnostics.Debug.WriteLine($"Failed to wipe API memory: {ex.Message}");
+                        System.Diagnostics.Debug.WriteLine($"Failed to clean up session: {ex.Message}");
                     }
                 };
-                
+
                 resultWin.Show();
             }
         }

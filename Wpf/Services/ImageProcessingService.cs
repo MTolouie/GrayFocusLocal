@@ -1,127 +1,170 @@
-﻿using Wpf.DTOs;
-using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.IO;
-using System.Net.Http;
-using System.Reflection.Metadata;
-using System.Text;
-using System.Text.Json;
+﻿using System;
+using System.Threading.Tasks;
+using Python.Runtime;
+using Wpf.DTOs;
 using Wpf.Services.IService;
-using Wpf.Entities;
 
 namespace Wpf.Services
 {
+    /// <summary>
+    /// Full rewrite: no HttpClient, no JSON, no MultipartFormDataContent, no
+    /// NDJSON streaming. Every call goes through PythonEngineService.Processor
+    /// (grayscale_clr.GrayscaleProcessor) inside `using (Py.GIL())`, wrapped
+    /// in Task.Run since Python.NET calls block the calling thread.
+    /// </summary>
     public class ImageProcessingService : IImageProcessingService
     {
-        private readonly HttpClient _httpClient;
+        private readonly PythonEngineService _engine;
 
-        public ImageProcessingService(HttpClient httpClient)
+        public ImageProcessingService(PythonEngineService engine)
         {
-            _httpClient = httpClient;
+            _engine = engine;
         }
 
-
-        public async Task CleanUpDataAsync(string sessionId)
+        public Task CleanUpDataAsync(string sessionId)
         {
-            var response = await _httpClient.DeleteAsync($"http://127.0.0.1:8000/session/{sessionId}/cleanup");
-
-            var data = await response.Content.ReadAsStringAsync();
-            var result = JsonSerializer.Deserialize<ResponseDTO>(data);
-
-            if (result?.status != "success")
-                throw new Exception($"Failed to clean up session {sessionId}. Server response: {data}");
-
-
-        }
-        public async Task<ResponseDTO> SendDataAsync(ScanRequestDTO request)
-        {
-            // 1. Create an anonymous object matching the expected JSON structure
-            var payload = new
+            return Task.Run(() =>
             {
-                session_id = request.SessionId ?? string.Empty,
-                min_val = request.MinValue,
-                max_val = request.MaxValue,
-                total_expected_images = request.total_expected_images, // Make sure this matches your Python model's variable name!
-                preview_count = request.preview_count 
-            };
-
-            // 2. Serialize to JSON and specify the application/json content type
-            string jsonString = JsonSerializer.Serialize(payload);
-            using var content = new StringContent(jsonString, Encoding.UTF8, "application/json");
-
-            // 3. Build and send the HttpRequestMessage natively
-            var httpRequest = new HttpRequestMessage(HttpMethod.Post, "http://127.0.0.1:8000/session/start")
-            {
-                Content = content
-            };
-
-            var response = await _httpClient.SendAsync(httpRequest);
-            var data = await response.Content.ReadAsStringAsync();
-            var result = JsonSerializer.Deserialize<ResponseDTO>(data);
-
-            
-
-            return result;
+                using (Py.GIL())
+                {
+                    // Raises KeyError -> PythonException if the session doesn't
+                    // exist; let it propagate, same as the old non-"success"
+                    // response used to surface as a thrown Exception.
+                    _engine.Processor.cleanup_session(sessionId);
+                }
+            });
         }
 
-        public async IAsyncEnumerable<ProcessingProgress> ScanImageAsync(byte[] imageBytes, string sessionId)
+        public Task<ResponseDTO> SendDataAsync(ScanRequestDTO request)
         {
-            // --- INVOCATION TRACER LOGGING ---
-            // Generate a unique token for THIS specific method execution context
-            string methodCallToken = Guid.NewGuid().ToString().Substring(0, 8);
-
-            // 1. Create the multi-part form content with an explicit boundary to guarantee uniqueness
-            using var content = new MultipartFormDataContent($"UploadBoundary-{methodCallToken}");
-
-            var fileContent = new ByteArrayContent(imageBytes);
-            // Explicitly verify content type matching for medical image handling
-            fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("image/tiff");
-
-            content.Add(fileContent, "file", "cropped.tif");
-
-            // 2. Build an HttpRequestMessage natively
-            var httpRequest = new HttpRequestMessage(HttpMethod.Post, $"http://127.0.0.1:8000/session/{sessionId}/process_image/")
+            return Task.Run(() =>
             {
-                Content = content
-            };
-
-            // 3. SendAsync with stream optimization parameters
-            var response = await _httpClient.SendAsync(httpRequest, HttpCompletionOption.ResponseHeadersRead);
-
-            System.Diagnostics.Debug.WriteLine($"[HTTP TRACE - {methodCallToken}] Server handshake established. Status: {response.StatusCode}");
-
-            response.EnsureSuccessStatusCode();
-
-            // 4. Read the streaming response chunks line-by-line
-            using var stream = await response.Content.ReadAsStreamAsync();
-            using var reader = new StreamReader(stream);
-
-            while (!reader.EndOfStream)
-            {
-                var line = await reader.ReadLineAsync();
-                if (string.IsNullOrWhiteSpace(line)) continue;
-
-                var options = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
-                ProcessingProgress progress = null;
-
                 try
                 {
-                    progress = JsonSerializer.Deserialize<ProcessingProgress>(line, options);
-                }
-                catch (JsonException jsonEx)
-                {
-                    System.Diagnostics.Debug.WriteLine($"[HTTP TRACE - {methodCallToken}] JSON Parse Warning on line: {line}. Error: {jsonEx.Message}");
-                    continue;
-                }
+                    using (Py.GIL())
+                    {
+                        // start_session() returns None on success and raises
+                        // KeyError if the session_id is already active
+                        _engine.Processor.start_session(
+                            request.SessionId ?? string.Empty,
+                            request.MinValue,
+                            request.MaxValue,
+                            request.total_expected_images,
+                            request.preview_count);
+                    }
 
-                if (progress != null)
+                    return new ResponseDTO { status = "started" };
+                }
+                catch (PythonException ex)
                 {
-                    yield return progress;
+                    return new ResponseDTO { status = "error", message = ex.Message };
+                }
+            });
+        }
+
+        public Task<ProcessingProgress> ProcessImageAsync(string sessionId, string imagePath, int currentIdx, Action<ProcessingProgress> progressReporter)
+        {
+            return Task.Run(() =>
+            {
+                using (Py.GIL())
+                {
+                    // Create the wrapper callback that converts Python object to PyObject
+                    Action<object> pyCallback = (pyPayload) =>
+                    {
+                        PyObject pyObj = (PyObject)pyPayload;
+                        ProcessingProgress progress = MapProgress(pyObj);
+                        progressReporter?.Invoke(progress);
+                    };
+
+                    // FIXED: Removed 'currentIdx' from this call so Python receives exactly 4 arguments (self, sessionId, imagePath, pyCallback)
+                    dynamic resultDict = _engine.Processor.process_image(sessionId, imagePath, pyCallback);
+
+                    return MapProgress((PyObject)resultDict);
+                }
+            });
+        }
+
+        public Task<PreviewImageData> GetPreviewImageAsync(string sessionId, string previewId)
+        {
+            return Task.Run(() =>
+            {
+                using (Py.GIL())
+                {
+                    // get_image() returns an 8-bit BGR numpy ndarray
+                    // (shape = [height, width, 3]), never bytes over HTTP.
+                    dynamic img = _engine.Processor.get_image(sessionId, previewId);
+
+                    int height = (int)img.shape[0];
+                    int width = (int)img.shape[1];
+                    int stride = width * 3; // BGR24, no numpy row padding from cv2 output
+
+                    PyObject rawBytes = img.tobytes();
+                    byte[] buffer = (byte[])rawBytes.As<byte[]>();
+
+                    return new PreviewImageData
+                    {
+                        PixelData = buffer,
+                        Width = width,
+                        Height = height,
+                        Stride = stride
+                    };
+                }
+            });
+        }
+
+        /// <summary>
+        /// Replaces JsonSerializer.Deserialize&lt;ProcessingProgress&gt;() —
+        /// pulls fields straight off the Python dict via dynamic attribute
+        /// access, matching the exact payload shape grayscale_clr.py builds.
+        /// </summary>
+        private static ProcessingProgress MapProgress(dynamic payload)
+        {
+            // 1. Ensure we strictly hold the GIL during the conversion!
+            // Even if the calling method has it, we wrap it here to be absolutely safe 
+            // against compiler-generated dynamic thread-switching.
+            using (Py.GIL())
+            {
+                // 2. Safely cast the dynamic payload to a PyObject
+                PyObject pyObj = (PyObject)payload;
+
+                // 3. Extract the status using a explicit direct cast or PyObject's safe item fetch
+                using (PyObject pyStatus = pyObj.GetItem("status"))
+                {
+                    string status = pyStatus.ToString(); // Or pyStatus.As<string>() safely inside this block
+
+                    var progress = new ProcessingProgress
+                    {
+                        Status = status
+                    };
+
+                    if (status == "progress")
+                    {
+                        using (PyObject pyMessage = pyObj.GetItem("message"))
+                        using (PyObject pyStep = pyObj.GetItem("step"))
+                        using (PyObject pyTotalSteps = pyObj.GetItem("total_steps"))
+                        {
+                            progress.Message = pyMessage.ToString();
+                            progress.Step = pyStep.As<int>();
+                            progress.TotalSteps = pyTotalSteps.As<int>();
+                        }
+                    }
+                    else if (status == "completed")
+                    {
+                        using (PyObject pySessionId = pyObj.GetItem("session_id"))
+                        using (PyObject pyPixelsInRange = pyObj.GetItem("image_pixels_in_range"))
+                        using (PyObject pyGlobalPixels = pyObj.GetItem("global_total_pixels"))
+                        using (PyObject pySavedPreviewId = pyObj.GetItem("saved_preview_id"))
+                        {
+                            progress.SessionId = pySessionId.ToString();
+                            progress.ImagePixelsInRange = pyPixelsInRange.As<int>();
+                            progress.GlobalTotalPixels = pyGlobalPixels.As<long>();
+                            progress.SavedPreviewId = pySavedPreviewId.IsNone() ? null : pySavedPreviewId.ToString();
+                        }
+                    }
+
+                    return progress;
                 }
             }
-
-            System.Diagnostics.Debug.WriteLine($"[HTTP TRACE - {methodCallToken}] Finished consumption of response stream cleanly.");
         }
     }
 }
