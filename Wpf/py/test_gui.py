@@ -14,6 +14,7 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from PIL import Image, ImageTk
 import numpy as np
+# pyrefly: ignore [missing-import]
 import cv2
 
 # grayscale_clr'ı aynı dizinden yükle
@@ -71,9 +72,13 @@ def accent_button(parent, text, command, color=ACCENT, **kw):
     return btn
 
 def _lighten(hex_color):
-    r = min(255, int(hex_color[1:3], 16) + 30)
-    g = min(255, int(hex_color[3:5], 16) + 30)
-    b = min(255, int(hex_color[5:7], 16) + 30)
+    # Expand 3-digit shorthand (#RGB → #RRGGBB) before slicing
+    h = hex_color.lstrip("#")
+    if len(h) == 3:
+        h = h[0]*2 + h[1]*2 + h[2]*2
+    r = min(255, int(h[0:2], 16) + 30)
+    g = min(255, int(h[2:4], 16) + 30)
+    b = min(255, int(h[4:6], 16) + 30)
     return f"#{r:02x}{g:02x}{b:02x}"
 
 def styled_entry(parent, width=22, **kw):
@@ -185,12 +190,13 @@ class App(tk.Tk):
         # ── Dosya seçimi ──────────────────────────────────────────────────
         c2 = card(parent)
         c2.pack(fill="x", pady=(0, 8))
-        self._section_header(c2, "📂  Görüntü Dosyaları")
+        self._section_header(c2, "Görüntü Dosyaları")
 
         btn_row2 = styled_frame(c2, bg=CARD)
         btn_row2.pack(fill="x", padx=14, pady=(4, 6))
         accent_button(btn_row2, "Dosya Seç…", self._pick_files).pack(side="left", padx=(0, 8))
-        accent_button(btn_row2, "Temizle",    self._clear_files, color="#555").pack(side="left")
+        accent_button(btn_row2, "Temizle",    self._clear_files, color="#555").pack(side="left", padx=(0, 8))
+        accent_button(btn_row2, "Örnek Bölge Seç", self._select_sample, color="#5c6bc0").pack(side="left")
 
         list_frame = styled_frame(c2, bg=CARD)
         list_frame.pack(fill="x", padx=14, pady=(0, 12))
@@ -210,7 +216,7 @@ class App(tk.Tk):
         self._section_header(c3, "▶  İşleme")
         run_row = styled_frame(c3, bg=CARD)
         run_row.pack(fill="x", padx=14, pady=(4, 14))
-        self.btn_run = accent_button(run_row, "🚀  Seçili Dosyaları İşle",
+        self.btn_run = accent_button(run_row, "Seçili Dosyaları İşle",
                                      self._run_processing, color=ACCENT2)
         self.btn_run.pack(side="left")
 
@@ -230,7 +236,7 @@ class App(tk.Tk):
         # ── Oturum özeti ──────────────────────────────────────────────────
         c4 = card(parent)
         c4.pack(fill="x", pady=(0, 8))
-        self._section_header(c4, "📊  Oturum Özeti")
+        self._section_header(c4, "Oturum Özeti")
         self.btn_summary = accent_button(c4, "Özeti Getir", self._get_summary, color="#555")
         self.btn_summary.pack(anchor="w", padx=14, pady=(4, 8))
         self.summary_text = tk.Text(
@@ -246,7 +252,7 @@ class App(tk.Tk):
         log_card.pack(fill="both", expand=True, pady=(0, 8))
         hdr = styled_frame(log_card, bg=CARD)
         hdr.pack(fill="x")
-        self._section_header(hdr, "📋  İşlem Günlüğü")
+        self._section_header(hdr, "İşlem Günlüğü")
         accent_button(hdr, "Temizle", self._clear_log, color="#555").pack(side="right", padx=14, pady=6)
 
         log_frame = styled_frame(log_card, bg="#111522")
@@ -270,7 +276,7 @@ class App(tk.Tk):
         # ── Önizleme galerisi ─────────────────────────────────────────────
         prev_card = card(parent)
         prev_card.pack(fill="x", pady=(0, 0))
-        self._section_header(prev_card, "🖼  Önizleme Galerisi")
+        self._section_header(prev_card, "Önizleme Galerisi")
 
         nav_row = styled_frame(prev_card, bg=CARD)
         nav_row.pack(fill="x", padx=14, pady=(4, 6))
@@ -369,6 +375,143 @@ class App(tk.Tk):
     def _clear_files(self):
         self.selected_files.clear()
         self.file_listbox.delete(0, "end")
+
+    # ── Örnek bölge seçimi ────────────────────────────────────────────────
+
+    def _select_sample(self):
+        """
+        İlk seçili dosyayı saf Tkinter modal penceresinde açar.
+        Kullanıcı canvas üzerine fare ile dikdörtgen çizer; 'Onayla'ya
+        basıldığında seçilen bölgenin ham piksel min/max değerleri
+        (16-bit dahil) spinbox'lara yazılır.
+        cv2 GUI hiç kullanılmaz → Qt/thread sorunu olmaz.
+        """
+        if not self.selected_files:
+            self._log("[Uyarı]: Önce dosya seçin.", "warn")
+            return
+
+        path = self.selected_files[0]
+
+        # ── 1. Ham görüntüyü oku (16-bit korunur) ──────────────────────
+        img_orig = cv2.imread(path, cv2.IMREAD_UNCHANGED)
+        if img_orig is None:
+            self._log(f"[Hata]: Görüntü okunamadı → {os.path.basename(path)}", "error")
+            return
+
+        # ── 2. Görüntüleme için 8-bit'e normalize et ───────────────────
+        if img_orig.dtype == np.uint16:
+            img_8bit = (img_orig >> 8).astype(np.uint8)
+        elif img_orig.dtype != np.uint8:
+            img_8bit = cv2.normalize(img_orig, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
+        else:
+            img_8bit = img_orig.copy()
+
+        if len(img_8bit.shape) == 2:           # grayscale → RGB
+            pil_disp = Image.fromarray(img_8bit)
+        else:
+            pil_disp = Image.fromarray(cv2.cvtColor(img_8bit, cv2.COLOR_BGR2RGB))
+
+        # ── 3. Ekrana sığacak şekilde küçült ──────────────────────────
+        MAX_W, MAX_H = 960, 680
+        pil_disp.thumbnail((MAX_W, MAX_H), Image.LANCZOS)
+        disp_w, disp_h = pil_disp.size
+        orig_h, orig_w = img_orig.shape[:2]
+        scale_x = orig_w / disp_w
+        scale_y = orig_h / disp_h
+
+        # ── 4. Modal Toplevel penceresi ────────────────────────────────
+        win = tk.Toplevel(self)
+        win.title(f"Örnek Bölge Seç  —  {os.path.basename(path)}")
+        win.configure(bg=BG)
+        win.resizable(False, False)
+        win.grab_set()           # modal: ana pencereyi kilitle
+
+        info = tk.Label(
+            win,
+            text="Fare ile dikdörtgen çizin, ardından 'Onayla' butonuna tıklayın.",
+            font=FONT_SMALL, fg=TEXT_DIM, bg=BG
+        )
+        info.pack(pady=(8, 2))
+
+        tk_img = ImageTk.PhotoImage(pil_disp)
+        canvas = tk.Canvas(
+            win, width=disp_w, height=disp_h,
+            cursor="crosshair", bg="#000",
+            highlightthickness=1, highlightbackground=BORDER
+        )
+        canvas.pack(padx=10, pady=6)
+        canvas.create_image(0, 0, anchor="nw", image=tk_img)
+        canvas.image = tk_img   # referansı koru
+
+        rect_id   = [None]
+        drag_start = [0, 0]
+        roi_coords = [None]     # (x0, y0, x1, y1) — display px
+
+        coord_lbl = tk.Label(win, text="", font=FONT_MONO, fg=TEXT_DIM, bg=BG)
+        coord_lbl.pack(pady=(0, 4))
+
+        def _press(e):
+            drag_start[0], drag_start[1] = e.x, e.y
+            if rect_id[0]:
+                canvas.delete(rect_id[0])
+
+        def _drag(e):
+            if rect_id[0]:
+                canvas.delete(rect_id[0])
+            rect_id[0] = canvas.create_rectangle(
+                drag_start[0], drag_start[1], e.x, e.y,
+                outline="#00e5ff", width=2, dash=(4, 2)
+            )
+            w = abs(e.x - drag_start[0])
+            h = abs(e.y - drag_start[1])
+            coord_lbl.config(
+                text=f"Görüntüleme: {w}×{h} px  |  "
+                     f"Orijinal: {int(w*scale_x)}×{int(h*scale_y)} px"
+            )
+
+        def _release(e):
+            x0 = min(drag_start[0], e.x)
+            y0 = min(drag_start[1], e.y)
+            x1 = max(drag_start[0], e.x)
+            y1 = max(drag_start[1], e.y)
+            roi_coords[0] = (x0, y0, x1, y1)
+
+        canvas.bind("<ButtonPress-1>",   _press)
+        canvas.bind("<B1-Motion>",       _drag)
+        canvas.bind("<ButtonRelease-1>", _release)
+
+        # ── 5. Onayla / İptal ─────────────────────────────────────────
+        def _confirm():
+            roi = roi_coords[0]
+            if roi is None or (roi[2]-roi[0]) < 2 or (roi[3]-roi[1]) < 2:
+                self._log("[Uyarı]: Bölge seçilmedi. Min/Max değişmedi.", "warn")
+                win.destroy()
+                return
+
+            x0, y0, x1, y1 = roi
+            # Görüntüleme koordinatlarını orijinal piksel koordinatlarına dönüştür
+            ox0, oy0 = int(x0 * scale_x), int(y0 * scale_y)
+            ox1, oy1 = int(x1 * scale_x), int(y1 * scale_y)
+
+            patch   = img_orig[oy0:oy1, ox0:ox1]
+            min_val = int(np.min(patch))
+            max_val = int(np.max(patch))
+
+            self.var_min.set(min_val)
+            self.var_max.set(max_val)
+            self._log(
+                f"Örnekleme tamamlandi → min={min_val}, max={max_val}  "
+                f"(orijinal: x={ox0} y={oy0}  {ox1-ox0}x{oy1-oy0} px)",
+                "completed"
+            )
+            win.destroy()
+
+        btn_row = tk.Frame(win, bg=BG)
+        btn_row.pack(pady=(2, 10))
+        accent_button(btn_row, "Onayla", _confirm, color=ACCENT2).pack(side="left", padx=8)
+        accent_button(btn_row, "Iptal",  win.destroy, color="#555").pack(side="left")
+
+        win.wait_window()   # ana döngüyü bloklama, modal olarak bekle
 
     # ── İşleme ────────────────────────────────────────────────────────────
 
