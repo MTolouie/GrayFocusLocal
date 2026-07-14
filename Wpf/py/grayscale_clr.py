@@ -59,6 +59,7 @@ Tasarım kuralları (Python.NET en iyi uygulamaları):
 ─────────────────────────────────────────────────────────────────────────────
 """
 
+# pyrefly: ignore [missing-import]
 import cv2
 import numpy as np
 
