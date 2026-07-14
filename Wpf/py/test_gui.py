@@ -14,6 +14,7 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from PIL import Image, ImageTk
 import numpy as np
+# pyrefly: ignore [missing-import]
 import cv2
 
 # grayscale_clr'ı aynı dizinden yükle
