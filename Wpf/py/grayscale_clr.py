@@ -60,6 +60,7 @@ Tasarım kuralları (Python.NET en iyi uygulamaları):
 """
 
 # pyrefly: ignore [missing-import]
+import os
 import cv2
 import numpy as np
 
@@ -292,7 +293,7 @@ class GrayscaleProcessor:
             img_color = cv2.cvtColor(img_8bit, cv2.COLOR_GRAY2BGR)
             img_color[mask > 0] = [0, 0, 255]  # aralık piksellerini kırmızı vurgula
 
-            preview_id = f"onizleme_{session_id}_{current_idx}.png"
+            preview_id = os.path.basename(image_path)
             # Görüntüyü doğrudan numpy dizisi olarak sakla (byte kodlaması yok)
             session["preview_images"][preview_id] = img_color
             saved_preview_id = preview_id
