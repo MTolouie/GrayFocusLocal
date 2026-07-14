@@ -18,10 +18,10 @@ namespace Wpf.Views
     /// </summary>
     public partial class ResultWindow : Window
     {
-        public ResultWindow(List<string> imagePathsList)
+        public ResultWindow(ResultViewModel viewModel)
         {
             InitializeComponent();
-            DataContext = new ResultViewModel(imagePathsList);
+            DataContext = viewModel;
         }
     }
 }

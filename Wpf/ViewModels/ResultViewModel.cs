@@ -1,32 +1,54 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
+using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.IO;
 using System.Linq;
-using System.Net.Http;
 using System.Threading;
+using System.Threading.Tasks;
+using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Wpf.Helpers;
+using Wpf.Services.IService;
 
 namespace Wpf.ViewModels
 {
+    /// <summary>
+    /// Full rewrite: no HttpClient, no GetByteArrayAsync, no download URLs.
+    /// Preview images now come straight out of the same in-process Python
+    /// engine via IImageProcessingService.GetPreviewImageAsync, decoded
+    /// directly into a BitmapSource. The concurrency cap is kept (each call
+    /// still blocks on the GIL even though there's no network latency).
+    /// </summary>
     public partial class ResultViewModel : ObservableObject
     {
-        private static readonly HttpClient _httpClient = new();
-        private const int MaxConcurrentDownloads = 4; 
+        private const int MaxConcurrentLoads = 4;
+
+        private readonly IImageProcessingService _processingService;
 
         public ObservableCollection<PreviewImageItem> Items { get; } = new();
 
-        public ResultViewModel(List<string> imageUrls)
+        public ResultViewModel(
+    List<(string SessionId, string PreviewId, string FileName)> previewRefs,
+    IImageProcessingService processingService)
         {
-            foreach (var url in imageUrls)
-                Items.Add(new PreviewImageItem(url));
+            _processingService = processingService;
+
+            foreach (var (sessionId, previewId, fileName) in previewRefs)
+            {
+                // FIXED: Instead of mapping the previewId to the UI label, map the exact file name
+                var item = new PreviewImageItem(sessionId, previewId)
+                {
+                    Label = fileName
+                };
+                Items.Add(item);
+            }
 
             _ = LoadImagesInParallelAsync();
         }
 
         private async Task LoadImagesInParallelAsync()
         {
-            using var throttle = new SemaphoreSlim(MaxConcurrentDownloads);
+            using var throttle = new SemaphoreSlim(MaxConcurrentLoads);
 
             var tasks = Items.Select(async item =>
             {
@@ -48,16 +70,15 @@ namespace Wpf.ViewModels
         {
             try
             {
-                byte[] bytes = await _httpClient.GetByteArrayAsync(item.Url);
+                var data = await _processingService.GetPreviewImageAsync(item.SessionId, item.PreviewId);
 
-                var bitmap = new BitmapImage();
-                using (var ms = new MemoryStream(bytes))
-                {
-                    bitmap.BeginInit();
-                    bitmap.CacheOption = BitmapCacheOption.OnLoad;
-                    bitmap.StreamSource = ms;
-                    bitmap.EndInit();
-                }
+                var bitmap = BitmapSource.Create(
+                    data.Width, data.Height,
+                    96, 96,
+                    PixelFormats.Bgr24,
+                    null,
+                    data.PixelData,
+                    data.Stride);
                 bitmap.Freeze();
 
                 item.ImageSource = bitmap;
