@@ -71,6 +71,23 @@ import numpy as np
 _sessions: dict = {}
 
 
+# ---------------------------------------------------------------------------
+# Küme kova yardımcıları
+# ---------------------------------------------------------------------------
+
+def _slot_for(pixels: int, pmin: int, pmax: int, n_slots: int) -> int:
+    """Piksel sayısını [0, n_slots) aralığındaki kovaya atar."""
+    if pmin == pmax:
+        return 0
+    return min(n_slots - 1, (pixels - pmin) * n_slots // (pmax - pmin + 1))
+
+
+def _slot_center(slot_idx: int, pmin: int, pmax: int, n_slots: int) -> float:
+    """Bir kovasının piksel-sayısı eksenindeki orta noktası."""
+    width = (pmax - pmin + 1) / n_slots
+    return pmin + (slot_idx + 0.5) * width
+
+
 class GrayscaleProcessor:
     """
     Python.NET aracılığıyla doğrudan gömülmek üzere tasarlanmış durum bilgili
@@ -118,8 +135,11 @@ class GrayscaleProcessor:
             "preview_count": max(1, preview_count),
             "processed_count": 0,
             "global_total_pixels": 0,
-            "selected_previews": [],  # list[str] – önizleme kimlikleri
-            "preview_images": {},     # str -> numpy ndarray (8-bit BGR)
+            # Küme-kova önizleme durumu
+            "preview_images": {},   # id → ndarray (yalnızca kova kazananları)
+            "preview_slots":  {},   # slot_idx → {"id": str, "pixels": int}
+            "pixel_min": None,      # sıfır-dışı piksel sayılarının cçalışan min’i
+            "pixel_max": None,      # sıfır-dışı piksel sayılarının cçalışan max’i
         }
 
     def get_session_results(self, session_id: str) -> dict:
@@ -142,7 +162,11 @@ class GrayscaleProcessor:
             "session_id": session_id,
             "total_images_processed": session["processed_count"],
             "global_total_pixels": session["global_total_pixels"],
-            "periodic_previews": session["selected_previews"],
+            # Kova kazananlarını slot indeksine göre sırala
+            "periodic_previews": [
+                v["id"]
+                for _, v in sorted(session["preview_slots"].items())
+            ],
         }
 
     def get_image(self, session_id: str, preview_id: str) -> np.ndarray:
@@ -272,32 +296,68 @@ class GrayscaleProcessor:
             ),
         })
 
-        # ── Seçim algoritması ──────────────────────────────────────────
-        # Dinamik periyodik örnekleme: toplu işlemi eşit bölerek preview_count
-        # kadar önizleme üretir. total_expected_images bilinmiyorsa (0) her
-        # N. görüntü geri düşüş olarak kullanılır.
-        total_expected = session["total_expected_images"]
-        preview_count  = session["preview_count"]
-        step_size = (
-            max(1, total_expected // preview_count)
-            if total_expected > 0
-            else preview_count
-        )
-        is_periodic = (current_idx % step_size == 0)
-
+        # ── Seçim: küme kovaları – sıfır piksellik görüntüler dışlanir ────────
         saved_preview_id = None
-        if is_periodic:
-            # Yalnızca önizleme için 8-bit'e dönüştür; yukarıdaki tüm
-            # hesaplamalar orijinal 16-bit img üzerinde yapıldı.
-            img_8bit  = (img >> 8).astype(np.uint8)
-            img_color = cv2.cvtColor(img_8bit, cv2.COLOR_GRAY2BGR)
-            img_color[mask > 0] = [0, 0, 255]  # aralık piksellerini kırmızı vurgula
 
-            preview_id = os.path.basename(image_path)
-            # Görüntüyü doğrudan numpy dizisi olarak sakla (byte kodlaması yok)
-            session["preview_images"][preview_id] = img_color
-            saved_preview_id = preview_id
-            session["selected_previews"].append(preview_id)
+        if pixels_in_range > 0:
+            px            = pixels_in_range
+            n             = session["preview_count"]
+
+            # Çalışan piksel-aralığını güncelle
+            range_expanded = False
+            if session["pixel_min"] is None or px < session["pixel_min"]:
+                session["pixel_min"] = px
+                range_expanded = True
+            if session["pixel_max"] is None or px > session["pixel_max"]:
+                session["pixel_max"] = px
+                range_expanded = True
+
+            pmin = session["pixel_min"]
+            pmax = session["pixel_max"]
+
+            # Aralık genişlediyse depodaki görüntüleri yeniden kovala
+            if range_expanded and session["preview_slots"]:
+                old_slots = dict(session["preview_slots"])
+                session["preview_slots"] = {}
+                for item in old_slots.values():
+                    new_slot = _slot_for(item["pixels"], pmin, pmax, n)
+                    existing = session["preview_slots"].get(new_slot)
+                    if existing is None:
+                        session["preview_slots"][new_slot] = item
+                    else:
+                        # Kova merkezine daha yakın olanı tut, diğerini bellekten sil
+                        center = _slot_center(new_slot, pmin, pmax, n)
+                        if abs(item["pixels"] - center) < abs(existing["pixels"] - center):
+                            del session["preview_images"][existing["id"]]
+                            session["preview_slots"][new_slot] = item
+                        else:
+                            del session["preview_images"][item["id"]]
+
+            # Geçerli görüntünün hedef kovasını belirle
+            target_slot = _slot_for(px, pmin, pmax, n)
+            existing    = session["preview_slots"].get(target_slot)
+            center      = _slot_center(target_slot, pmin, pmax, n)
+
+            keep = (
+                existing is None
+                or abs(px - center) < abs(existing["pixels"] - center)
+            )
+
+            if keep:
+                # Yolnızca önizleme için 8-bit'e dönüştür
+                img_8bit  = (img >> 8).astype(np.uint8)
+                img_color = cv2.cvtColor(img_8bit, cv2.COLOR_GRAY2BGR)
+                img_color[mask > 0] = [0, 0, 255]
+
+                preview_id = os.path.basename(image_path)
+
+                if existing is not None:
+                    # Mevcut kova sahibini bellekten çıkar
+                    del session["preview_images"][existing["id"]]
+
+                session["preview_images"][preview_id] = img_color
+                session["preview_slots"][target_slot]  = {"id": preview_id, "pixels": px}
+                saved_preview_id = preview_id
 
         # ── Tamamlandı – yerel dict döndür ────────────────────────────
         result = {

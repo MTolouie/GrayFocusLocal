@@ -618,10 +618,19 @@ class App(tk.Tk):
             messagebox.showwarning("Uyarı", "Aktif oturum yok.")
             return
         self._preview_images.clear()
-        for pid in self.preview_ids:
+        try:
+            # Always fetch the authoritative list from the session so that
+            # images evicted by the cluster-bucket algorithm are never requested.
+            current_ids = self.processor.get_session_results(
+                self.session_id
+            )["periodic_previews"]
+        except Exception as ex:
+            self._log(f"✘ Oturum sonuçları alınamadı: {ex}", "error")
+            return
+
+        for pid in current_ids:
             try:
                 arr = self.processor.get_image(self.session_id, pid)
-                # BGR → RGB
                 rgb = cv2.cvtColor(arr, cv2.COLOR_BGR2RGB)
                 pil = Image.fromarray(rgb)
                 pil.thumbnail((700, 210))
