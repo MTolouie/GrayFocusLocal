@@ -42,7 +42,7 @@ namespace Wpf.ViewModels
         // There's no server to build a URL for anymore — this now stores the
         // (sessionId, previewId) pairs ResultViewModel needs to call
         // GetPreviewImageAsync itself.
-        private List<(string SessionId, string PreviewId)> _processedResultsPaths = new();
+        private List<(string SessionId, string PreviewId, string FileName)> _processedResultsPaths = new();
 
         [ObservableProperty] private string? _imagePath;
         [ObservableProperty] private string _imageDisplayTitle = "Original Photo";
@@ -176,7 +176,7 @@ namespace Wpf.ViewModels
             double totalVolumeCubicMicrons = TotalPixelsInRange * voxelVolumeCubicMicrons;
             double totalVolumeCubicMeters = totalVolumeCubicMicrons / 1000000000;
 
-            CalculatedVolumeMessage = $"Total Volume: {totalVolumeCubicMeters.ToString("F12", System.Globalization.CultureInfo.InvariantCulture)} m³ ({TotalPixelsInRange} voxels)";
+            CalculatedVolumeMessage = $"Total Volume: {totalVolumeCubicMeters.ToString("F12", System.Globalization.CultureInfo.InvariantCulture)} mm³ ({TotalPixelsInRange} voxels)";
         }
 
         // --- file SELECTION COMMAND ---
@@ -670,7 +670,7 @@ namespace Wpf.ViewModels
 
                         if (!string.IsNullOrEmpty(savedImagePathResult))
                         {
-                            _processedResultsPaths.Add((sessionId, savedImagePathResult));
+                            _processedResultsPaths.Add((sessionId, savedImagePathResult, currentFileName));
                         }
 
                         SelectedImagesQueue.Remove(imgPath);

@@ -16,6 +16,8 @@ namespace Wpf.Helpers
         public string SessionId { get; }
         public string PreviewId { get; }
 
+        public string Label { get; set; }
+
         [ObservableProperty] private BitmapSource? _imageSource;
         [ObservableProperty] private bool _isLoading = true;
         [ObservableProperty] private string? _errorMessage;

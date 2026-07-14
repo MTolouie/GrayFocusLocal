@@ -28,13 +28,20 @@ namespace Wpf.ViewModels
         public ObservableCollection<PreviewImageItem> Items { get; } = new();
 
         public ResultViewModel(
-            List<(string SessionId, string PreviewId)> previewRefs,
-            IImageProcessingService processingService)
+    List<(string SessionId, string PreviewId, string FileName)> previewRefs,
+    IImageProcessingService processingService)
         {
             _processingService = processingService;
 
-            foreach (var (sessionId, previewId) in previewRefs)
-                Items.Add(new PreviewImageItem(sessionId, previewId));
+            foreach (var (sessionId, previewId, fileName) in previewRefs)
+            {
+                // FIXED: Instead of mapping the previewId to the UI label, map the exact file name
+                var item = new PreviewImageItem(sessionId, previewId)
+                {
+                    Label = fileName
+                };
+                Items.Add(item);
+            }
 
             _ = LoadImagesInParallelAsync();
         }
