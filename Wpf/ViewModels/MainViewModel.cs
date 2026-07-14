@@ -89,9 +89,9 @@ namespace Wpf.ViewModels
         public ObservableCollection<string> ExecutionLog { get; } = new();
 
         // --- GEOMETRIC CALCULATIONS ---
-        [ObservableProperty] private double _fodValue = 100.0; // Default example value
-        [ObservableProperty] private double _fddValue = 500.0; // Default example value
-        [ObservableProperty] private double _detectorPixelSize = 50.0; // Default 50 microns
+        [ObservableProperty] private double _fodValue = 181.4; // Default example value
+        [ObservableProperty] private double _fddValue = 448.7; // Default example value
+        [ObservableProperty] private double _detectorPixelSize = 49.50; // Default 50 microns
 
         [ObservableProperty] private string _calculatedResolutionMessage = "Real Resolution: N/A";
 
