@@ -50,6 +50,24 @@ namespace Wpf.ViewModels
         // --- SELECTION MOUSE STATE PROPERTIES ---
         private Point _startPoint;
         private bool _isDragging;
+        private bool _isFreehandDrawing;
+        private Point _lastFreehandPoint;
+
+        // Minimum on-screen distance (px) between recorded points while dragging,
+        // so we don't flood PointCollection with hundreds of near-duplicate points.
+        private const double FreehandMinPointDistance = 1.5;
+
+        // Fill used only once a freehand trace is actually closed (mirrors the
+        // Fill="#33F59E0B" used for the polygon tool). Frozen for perf since it
+        // never changes and gets assigned repeatedly.
+        private static readonly Brush ClosedFreehandFillBrush = CreateClosedFreehandFillBrush();
+
+        private static Brush CreateClosedFreehandFillBrush()
+        {
+            var brush = new SolidColorBrush(Color.FromArgb(0x33, 0xF5, 0x9E, 0x0B));
+            brush.Freeze();
+            return brush;
+        }
 
         [ObservableProperty] private double _rectLeft;
         [ObservableProperty] private double _rectTop;
@@ -67,9 +85,14 @@ namespace Wpf.ViewModels
 
         [ObservableProperty] private bool _isRectangleMode = true;
         [ObservableProperty] private bool _isPolygonMode = false;
+        [ObservableProperty] private bool _isFreehandMode = false;
 
         [ObservableProperty] private PointCollection _polygonPoints = new PointCollection();
         [ObservableProperty] private Visibility _polygonVisibility = Visibility.Collapsed;
+
+        [ObservableProperty] private PointCollection _freehandPoints = new PointCollection();
+        [ObservableProperty] private Visibility _freehandVisibility = Visibility.Collapsed;
+        [ObservableProperty] private Brush _freehandFillBrush = Brushes.Transparent;
 
         // Track the live drawing line from the last clicked vertex to the active mouse cursor position
         [ObservableProperty] private double _tempLineX1;
@@ -251,6 +274,10 @@ namespace Wpf.ViewModels
                 PolygonPoints = new PointCollection();
                 PolygonVisibility = Visibility.Collapsed;
                 TempLineVisibility = Visibility.Collapsed;
+                FreehandPoints = new PointCollection();
+                FreehandVisibility = Visibility.Collapsed;
+                _isFreehandDrawing = false;
+                FreehandFillBrush = Brushes.Transparent;
                 ZoomScale = 1.0;
                 ImageDisplayTitle = $"Original Photo ({Path.GetFileName(ImagePath)}) - {SelectedImagesQueue.Count} remaining";
                 CurrentStatusMessage = $"Ready for selection on: {Path.GetFileName(ImagePath)}";
@@ -328,6 +355,11 @@ namespace Wpf.ViewModels
             TempLineVisibility = Visibility.Collapsed;
             TempLineX1 = 0; TempLineY1 = 0;
             TempLineX2 = 0; TempLineY2 = 0;
+
+            FreehandPoints = new PointCollection();
+            FreehandVisibility = Visibility.Collapsed;
+            _isFreehandDrawing = false;
+            FreehandFillBrush = Brushes.Transparent;
 
             SelectedMinIntensity = "N/A";
             SelectedMaxIntensity = "N/A";
@@ -431,6 +463,28 @@ namespace Wpf.ViewModels
                     CurrentStatusMessage = $"Added vertex point {PolygonPoints.Count}. Right-click anywhere to complete the shape.";
                 }
             }
+            else if (IsFreehandMode)
+            {
+                if (e.LeftButton == MouseButtonState.Pressed)
+                {
+                    _isFreehandDrawing = true;
+                    _lastFreehandPoint = clickPoint;
+
+                    RectVisibility = Visibility.Collapsed;
+                    PolygonVisibility = Visibility.Collapsed;
+                    TempLineVisibility = Visibility.Collapsed;
+
+                    FreehandPoints = new PointCollection { clickPoint };
+                    FreehandVisibility = Visibility.Visible;
+                    FreehandFillBrush = Brushes.Transparent;
+
+                    SelectedMinIntensity = "N/A";
+                    SelectedMaxIntensity = "N/A";
+                    _currentRoiResult = null;
+
+                    CurrentStatusMessage = "Drawing freehand shape... release the mouse to close it.";
+                }
+            }
         }
 
         partial void OnIsRectangleModeChanged(bool value)
@@ -440,6 +494,12 @@ namespace Wpf.ViewModels
                 PolygonPoints = new PointCollection();
                 PolygonVisibility = Visibility.Collapsed;
                 TempLineVisibility = Visibility.Collapsed;
+
+                FreehandPoints = new PointCollection();
+                FreehandVisibility = Visibility.Collapsed;
+                _isFreehandDrawing = false;
+                FreehandFillBrush = Brushes.Transparent;
+
                 SelectedMinIntensity = "N/A";
                 SelectedMaxIntensity = "N/A";
                 _currentRoiResult = null;
@@ -453,6 +513,30 @@ namespace Wpf.ViewModels
                 RectVisibility = Visibility.Collapsed;
                 RectWidth = 0;
                 RectHeight = 0;
+
+                FreehandPoints = new PointCollection();
+                FreehandVisibility = Visibility.Collapsed;
+                _isFreehandDrawing = false;
+                FreehandFillBrush = Brushes.Transparent;
+
+                SelectedMinIntensity = "N/A";
+                SelectedMaxIntensity = "N/A";
+                _currentRoiResult = null;
+            }
+        }
+
+        partial void OnIsFreehandModeChanged(bool value)
+        {
+            if (value)
+            {
+                RectVisibility = Visibility.Collapsed;
+                RectWidth = 0;
+                RectHeight = 0;
+
+                PolygonPoints = new PointCollection();
+                PolygonVisibility = Visibility.Collapsed;
+                TempLineVisibility = Visibility.Collapsed;
+
                 SelectedMinIntensity = "N/A";
                 SelectedMaxIntensity = "N/A";
                 _currentRoiResult = null;
@@ -479,11 +563,54 @@ namespace Wpf.ViewModels
                 TempLineX2 = currentPoint.X;
                 TempLineY2 = currentPoint.Y;
             }
+            else if (IsFreehandMode && _isFreehandDrawing)
+            {
+                double dx = currentPoint.X - _lastFreehandPoint.X;
+                double dy = currentPoint.Y - _lastFreehandPoint.Y;
+
+                if ((dx * dx) + (dy * dy) >= FreehandMinPointDistance * FreehandMinPointDistance)
+                {
+                    var updatedPoints = new PointCollection(FreehandPoints)
+                    {
+                        currentPoint
+                    };
+
+                    FreehandPoints = updatedPoints;
+                    _lastFreehandPoint = currentPoint;
+                }
+            }
         }
 
         [RelayCommand]
         private void CanvasMouseUp()
         {
+            if (IsFreehandMode && _isFreehandDrawing)
+            {
+                _isFreehandDrawing = false;
+
+                if (FreehandPoints != null && FreehandPoints.Count > 2)
+                {
+                    // Close the traced shape back to its starting point
+                    var closedPoints = new PointCollection(FreehandPoints)
+                    {
+                        FreehandPoints[0]
+                    };
+                    FreehandPoints = closedPoints;
+                    FreehandFillBrush = ClosedFreehandFillBrush;
+
+                    CurrentStatusMessage = $"Freehand region marked for {Path.GetFileName(ImagePath)}. Calculating pixel metrics...";
+                    _ = CalculateRegionIntensitiesAsync();
+                }
+                else
+                {
+                    FreehandVisibility = Visibility.Collapsed;
+                    FreehandFillBrush = Brushes.Transparent;
+                    CurrentStatusMessage = "Freehand shape was too small — try drawing a larger area.";
+                }
+
+                return;
+            }
+
             if (!_isDragging) return;
             _isDragging = false;
 
@@ -540,7 +667,7 @@ namespace Wpf.ViewModels
                 SelectedMaxIntensity = _currentRoiResult.MaxValue.ToString();
                 CurrentStatusMessage = "Analysis complete.";
             }
-            else if (!IsRectangleMode && PolygonPoints != null && PolygonPoints.Count > 2)
+            else if (IsPolygonMode && PolygonPoints != null && PolygonPoints.Count > 2)
             {
                 // Convert screen space Points array into raw pixel space RoiPoint array
                 var scaledPoints = new List<Wpf.Entities.RoiPoint>();
@@ -554,6 +681,25 @@ namespace Wpf.ViewModels
 
                 CurrentStatusMessage = "Computing polygon intensities...";
                 _currentRoiResult = await _roiProcessorService.CreatePolygonAsync(ImagePath, polygonRoi);
+
+                SelectedMinIntensity = _currentRoiResult.MinValue.ToString();
+                SelectedMaxIntensity = _currentRoiResult.MaxValue.ToString();
+                CurrentStatusMessage = "Analysis complete.";
+            }
+            else if (IsFreehandMode && FreehandPoints != null && FreehandPoints.Count > 2)
+            {
+                // A closed freehand trace is just a many-vertex polygon, so it
+                // reuses the exact same ROI pipeline as the polygon tool.
+                var scaledPoints = new List<Wpf.Entities.RoiPoint>();
+                foreach (var pt in FreehandPoints)
+                {
+                    scaledPoints.Add(new Wpf.Entities.RoiPoint(pt.X * scaleX, pt.Y * scaleY));
+                }
+
+                var freehandRoi = new PolygonRoi(scaledPoints);
+
+                CurrentStatusMessage = "Computing freehand region intensities...";
+                _currentRoiResult = await _roiProcessorService.CreatePolygonAsync(ImagePath, freehandRoi);
 
                 SelectedMinIntensity = _currentRoiResult.MinValue.ToString();
                 SelectedMaxIntensity = _currentRoiResult.MaxValue.ToString();
@@ -624,6 +770,10 @@ namespace Wpf.ViewModels
                 PolygonPoints = new PointCollection();
                 PolygonVisibility = Visibility.Collapsed;
                 TempLineVisibility = Visibility.Collapsed;
+                FreehandPoints = new PointCollection();
+                FreehandVisibility = Visibility.Collapsed;
+                _isFreehandDrawing = false;
+                FreehandFillBrush = Brushes.Transparent;
 
                 ImageDisplayTitle = $"Original Photo ({currentFileName}) - {SelectedImagesQueue.Count} remaining";
                 CurrentStatusMessage = $"Processing {currentFileName} in-memory...";
@@ -746,6 +896,14 @@ namespace Wpf.ViewModels
             TempLineVisibility = Visibility.Collapsed;
             TempLineX1 = 0; TempLineY1 = 0;
             TempLineX2 = 0; TempLineY2 = 0;
+
+            if (FreehandPoints != null)
+            {
+                FreehandPoints.Clear();
+            }
+            FreehandVisibility = Visibility.Collapsed;
+            _isFreehandDrawing = false;
+            FreehandFillBrush = Brushes.Transparent;
 
             SelectedMinIntensity = "N/A";
             SelectedMaxIntensity = "N/A";

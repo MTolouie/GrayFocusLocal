@@ -25,7 +25,7 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="200" />
         </Grid.RowDefinitions>
-        
+
         <Border Grid.Row="0" Grid.Column="0" Margin="10" 
                 Background="{StaticResource EditorBackgroundBrush}" 
                 BorderBrush="{StaticResource BorderBrush}" 
@@ -105,6 +105,14 @@
                                          IsHitTestVisible="False" 
                                          Visibility="{Binding PolygonVisibility}"/>
 
+                                <Polyline x:Name="FreehandPolyline"
+                                          Points="{Binding FreehandPoints}"
+                                          Stroke="#F59E0B" 
+                                          StrokeThickness="{Binding PolygonStrokeThickness}"
+                                          Fill="{Binding FreehandFillBrush}"
+                                          IsHitTestVisible="False" 
+                                          Visibility="{Binding FreehandVisibility}"/>
+
                                 <Line X1="{Binding TempLineX1}" Y1="{Binding TempLineY1}"
                                       X2="{Binding TempLineX2}" Y2="{Binding TempLineY2}"
                                       Stroke="#22C55E" StrokeThickness="{Binding LineStrokeThickness}" StrokeDashArray="0.5 0.5"
@@ -113,8 +121,8 @@
                                       Visibility="{Binding TempLineVisibility}"/>
                             </Canvas>
                         </Grid>
-                    </Grid>         
-                </ScrollViewer>    
+                    </Grid>
+                </ScrollViewer>
             </Grid>
         </Border>
         <Border Grid.Row="2" Grid.Column="0" Margin="5" 
@@ -122,7 +130,7 @@
                 BorderBrush="{StaticResource BorderBrush}" 
                 BorderThickness="1" 
                 CornerRadius="6">
-        <Grid Grid.Row="1" Grid.Column="0">
+            <Grid Grid.Row="1" Grid.Column="0">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
@@ -134,7 +142,7 @@
                          Style="{StaticResource TerminalListBoxStyle}"/>
             </Grid>
         </Border>
-          
+
 
         <GridSplitter Grid.Column="1" Width="4" HorizontalAlignment="Stretch" 
                       Background="{StaticResource SplitterBrush}"/>
@@ -166,12 +174,16 @@
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
                                 <RadioButton Grid.Column="0" Content="Rectangle Box"
                                              IsChecked="{Binding IsRectangleMode, Mode=TwoWay}"
                                              Foreground="White" VerticalAlignment="Center"/>
                                 <RadioButton Grid.Column="1" Content="Polygon Shape"
                                              IsChecked="{Binding IsPolygonMode, Mode=TwoWay}"
+                                             Foreground="White" VerticalAlignment="Center"/>
+                                <RadioButton Grid.Column="2" Content="Freehand Draw"
+                                             IsChecked="{Binding IsFreehandMode, Mode=TwoWay}"
                                              Foreground="White" VerticalAlignment="Center"/>
                             </Grid>
 
