@@ -754,7 +754,7 @@ if __name__ == "__main__":
     try:
         from PIL import Image  # noqa: F401 – kontrol
     except ImportError:
-        print("Pillow bulunamadı. Lütfen kurun: pip install Pillow")
+        print("Pillow bulunamadı. Lütfen bu komut ile kurunuz: pip install Pillow")
         sys.exit(1)
 
     app = App()
