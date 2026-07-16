@@ -53,9 +53,9 @@ namespace Wpf.ViewModels
         private bool _isFreehandDrawing;
         private Point _lastFreehandPoint;
 
-        // Minimum on-screen distance (px) between recorded points while dragging,
-        // so we don't flood PointCollection with hundreds of near-duplicate points.
-        private const double FreehandMinPointDistance = 1.5;
+        // CHANGED: Dynamically adjusts coordinate distance threshold based on ZoomScale
+        // so drawing curves remains highly responsive and ultra-precise when zoomed way in.
+        private double FreehandMinPointDistance => ZoomScale > 0 ? 1.5 / ZoomScale : 1.5;
 
         // Fill used only once a freehand trace is actually closed (mirrors the
         // Fill="#33F59E0B" used for the polygon tool). Frozen for perf since it
@@ -160,8 +160,6 @@ namespace Wpf.ViewModels
                 CalculatedResolutionMessage = "Real Resolution: Invalid Dimensions";
                 return;
             }
-
-
 
             // 1. M = FDD / FOD
             // 2. Object Pixel Size = Detector Pixel Size / M
@@ -568,7 +566,10 @@ namespace Wpf.ViewModels
                 double dx = currentPoint.X - _lastFreehandPoint.X;
                 double dy = currentPoint.Y - _lastFreehandPoint.Y;
 
-                if ((dx * dx) + (dy * dy) >= FreehandMinPointDistance * FreehandMinPointDistance)
+                // CHANGED: Capturing current calculated threshold dynamically instead of constant
+                double minDistance = FreehandMinPointDistance;
+
+                if ((dx * dx) + (dy * dy) >= minDistance * minDistance)
                 {
                     var updatedPoints = new PointCollection(FreehandPoints)
                     {
