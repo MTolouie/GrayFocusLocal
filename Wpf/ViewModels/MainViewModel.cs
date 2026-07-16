@@ -347,7 +347,7 @@ namespace Wpf.ViewModels
             RectHeight = 0;
             RectVisibility = Visibility.Collapsed;
 
-            PolygonPoints = new PointCollection();
+            PolygonPoints = new PointCollection(); // Reassigned (Correct)
             PolygonVisibility = Visibility.Collapsed;
 
             TempLineVisibility = Visibility.Collapsed;
@@ -894,20 +894,14 @@ namespace Wpf.ViewModels
             RectLeft = 0; RectTop = 0; RectWidth = 0; RectHeight = 0;
             RectVisibility = Visibility.Collapsed;
 
-            if (PolygonPoints != null)
-            {
-                PolygonPoints.Clear();
-            }
+            PolygonPoints = new PointCollection();
             PolygonVisibility = Visibility.Collapsed;
 
             TempLineVisibility = Visibility.Collapsed;
             TempLineX1 = 0; TempLineY1 = 0;
             TempLineX2 = 0; TempLineY2 = 0;
 
-            if (FreehandPoints != null)
-            {
-                FreehandPoints.Clear();
-            }
+            FreehandPoints = new PointCollection();
             FreehandVisibility = Visibility.Collapsed;
             _isFreehandDrawing = false;
             FreehandFillBrush = Brushes.Transparent;
