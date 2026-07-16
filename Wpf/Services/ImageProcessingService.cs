@@ -164,7 +164,49 @@ namespace Wpf.Services
 
                     return progress;
                 }
+
+
             }
+        }
+
+        public Task<SessionResultsDTO> GetSessionResultsAsync(string sessionId)
+        {
+            return Task.Run(() =>
+            {
+                using (Py.GIL())
+                {
+                    // Call the Python method: get_session_results(session_id)
+                    dynamic resultsDict = _engine.Processor.get_session_results(sessionId);
+                    PyObject pyObj = (PyObject)resultsDict;
+
+                    var results = new SessionResultsDTO();
+
+                    // Extract the fields safely inside the GIL scope
+                    using (PyObject pySessionId = pyObj.GetItem("session_id"))
+                    using (PyObject pyProcessedCount = pyObj.GetItem("total_images_processed"))
+                    using (PyObject pyGlobalPixels = pyObj.GetItem("global_total_pixels"))
+                    using (PyObject pyPeriodicPreviews = pyObj.GetItem("periodic_previews"))
+                    {
+                        results.SessionId = pySessionId.ToString();
+                        results.TotalImagesProcessed = pyProcessedCount.As<int>();
+                        results.GlobalTotalPixels = pyGlobalPixels.As<long>();
+
+                        // Parse the Python list of strings (preview IDs)
+                        var previewsList = new System.Collections.Generic.List<string>();
+                        int listLength = (int)pyPeriodicPreviews.Length();
+                        for (int i = 0; i < listLength; i++)
+                        {
+                            using (PyObject item = pyPeriodicPreviews.GetItem(i))
+                            {
+                                previewsList.Add(item.ToString());
+                            }
+                        }
+                        results.PeriodicPreviews = previewsList;
+                    }
+
+                    return results;
+                }
+            });
         }
     }
 }

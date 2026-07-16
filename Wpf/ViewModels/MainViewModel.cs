@@ -818,12 +818,6 @@ namespace Wpf.ViewModels
 
                         TotalPixelsInRange += targetCountResult;
                         RecalculateTotalVolume();
-
-                        if (!string.IsNullOrEmpty(savedImagePathResult))
-                        {
-                            _processedResultsPaths.Add((sessionId, savedImagePathResult, currentFileName));
-                        }
-
                         SelectedImagesQueue.Remove(imgPath);
                     }
                     else
@@ -855,6 +849,18 @@ namespace Wpf.ViewModels
 
                 ClearSelectionAndShapes();
 
+                // 1. Get the final, optimized preview names chosen by Python's dynamic binning algorithm
+                SessionResultsDTO sessionSummary = await _processingService.GetSessionResultsAsync(sessionId);
+
+                // 2. Clear the list so we only display the final binned previews
+                _processedResultsPaths.Clear();
+
+                // 3. Populate using the local 'sessionId' variable
+                for (int i = 0; i < sessionSummary.PeriodicPreviews.Count; i++)
+                {
+                    string previewPath = sessionSummary.PeriodicPreviews[i];
+                    _processedResultsPaths.Add((sessionId, previewPath, previewPath));
+                }
                 var resultWin = _resultWindowFactory.Create(_processedResultsPaths);
                 resultWin.Owner = System.Windows.Application.Current.MainWindow;
 

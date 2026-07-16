@@ -22,6 +22,8 @@ namespace Wpf.Services.IService
 
         Task<PreviewImageData> GetPreviewImageAsync(string sessionId, string previewId);
 
+        Task<SessionResultsDTO> GetSessionResultsAsync(string sessionId);
+
         Task CleanUpDataAsync(string sessionId);
     }
 }
