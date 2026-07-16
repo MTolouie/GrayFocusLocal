@@ -315,23 +315,28 @@ class GrayscaleProcessor:
             pmin = session["pixel_min"]
             pmax = session["pixel_max"]
 
-            # Aralık genişlediyse depodaki görüntüleri yeniden kovala
+            # ... lines 318-334 inside process_image ...
             if range_expanded and session["preview_slots"]:
                 old_slots = dict(session["preview_slots"])
                 session["preview_slots"] = {}
+                
                 for item in old_slots.values():
                     new_slot = _slot_for(item["pixels"], pmin, pmax, n)
                     existing = session["preview_slots"].get(new_slot)
+                    
                     if existing is None:
                         session["preview_slots"][new_slot] = item
                     else:
-                        # Kova merkezine daha yakın olanı tut, diğerini bellekten sil
                         center = _slot_center(new_slot, pmin, pmax, n)
                         if abs(item["pixels"] - center) < abs(existing["pixels"] - center):
-                            del session["preview_images"][existing["id"]]
+                            # item is closer to center: delete existing, keep item
+                            if existing["id"] in session["preview_images"]:
+                                del session["preview_images"][existing["id"]]
                             session["preview_slots"][new_slot] = item
                         else:
-                            del session["preview_images"][item["id"]]
+                            # existing is closer: delete item, keep existing
+                            if item["id"] in session["preview_images"]:
+                                del session["preview_images"][item["id"]]
 
             # Geçerli görüntünün hedef kovasını belirle
             target_slot = _slot_for(px, pmin, pmax, n)
