@@ -666,6 +666,87 @@ class App(tk.Tk):
             self._preview_index = (self._preview_index + 1) % len(self._preview_images)
             self._show_preview()
 
+    def _open_preview_zoom(self):
+        """Gecërli önizlemeyi tam çözünürlükte ayrı bir Toplevel penceresinde gösterir."""
+        if not self._preview_images:
+            return
+
+        pid, _ = self._preview_images[self._preview_index]
+
+        # Orijinal numpy dizisini çek (küçültülmemiş tam çözünürlük)
+        try:
+            arr = self.processor.get_image(self.session_id, pid)
+        except Exception as ex:
+            self._log(f"[Hata]: Buyutme için goruntu alinamadi: {ex}", "error")
+            return
+
+        rgb = cv2.cvtColor(arr, cv2.COLOR_BGR2RGB)
+        pil_full = Image.fromarray(rgb)
+        img_w, img_h = pil_full.size
+
+        # Ekrana sığacak şekilde ölçekle (ama gerçek çözünürlükü asm a)
+        screen_w = self.winfo_screenwidth()  - 80
+        screen_h = self.winfo_screenheight() - 120
+        scale = min(1.0, screen_w / img_w, screen_h / img_h)
+        disp_w = int(img_w * scale)
+        disp_h = int(img_h * scale)
+        pil_disp = pil_full.resize((disp_w, disp_h), Image.LANCZOS)
+
+        # ── Pencere ──────────────────────────────────────────────────────
+        win = tk.Toplevel(self)
+        win.title(f"{pid}  ({img_w}×{img_h} px  |  ekran: {disp_w}×{disp_h})")
+        win.configure(bg=BG)
+
+        # Scrollable canvas (büyük görüntüler için)
+        frame = tk.Frame(win, bg=BG)
+        frame.pack(fill="both", expand=True)
+
+        vsb = tk.Scrollbar(frame, orient="vertical",   bg=BG, troughcolor=SURFACE)
+        hsb = tk.Scrollbar(frame, orient="horizontal", bg=BG, troughcolor=SURFACE)
+        canvas = tk.Canvas(
+            frame,
+            width=min(disp_w, screen_w),
+            height=min(disp_h, screen_h),
+            bg="#0a0c14",
+            yscrollcommand=vsb.set,
+            xscrollcommand=hsb.set,
+            highlightthickness=0,
+        )
+        vsb.config(command=canvas.yview)
+        hsb.config(command=canvas.xview)
+
+        canvas.grid(row=0, column=0, sticky="nsew")
+        vsb.grid(row=0, column=1, sticky="ns")
+        hsb.grid(row=1, column=0, sticky="ew")
+        frame.rowconfigure(0, weight=1)
+        frame.columnconfigure(0, weight=1)
+
+        tk_img = ImageTk.PhotoImage(pil_disp)
+        canvas.create_image(0, 0, anchor="nw", image=tk_img)
+        canvas.image = tk_img   # referansi koru
+        canvas.configure(scrollregion=(0, 0, disp_w, disp_h))
+
+        # Fare tekerlegi ile kaydirma
+        canvas.bind("<MouseWheel>",
+                    lambda e: canvas.yview_scroll(int(-1 * (e.delta / 120)), "units"))
+        canvas.bind("<Button-4>",
+                    lambda e: canvas.yview_scroll(-1, "units"))
+        canvas.bind("<Button-5>",
+                    lambda e: canvas.yview_scroll( 1, "units"))
+
+        # Meta bilgisi
+        info_bar = tk.Frame(win, bg=SURFACE, height=28)
+        info_bar.pack(fill="x", side="bottom")
+        info_bar.pack_propagate(False)
+        tk.Label(
+            info_bar,
+            text=f"  {pid}   |   {img_w}×{img_h} px   |   Cift tikla: kapat",
+            font=FONT_SMALL, fg=TEXT_DIM, bg=SURFACE, anchor="w"
+        ).pack(fill="x", padx=8, pady=4)
+
+        win.bind("<Double-Button-1>", lambda e: win.destroy())
+        win.bind("<Escape>",          lambda e: win.destroy())
+
 
 # ─── Giriş noktası ─────────────────────────────────────────────────────────
 
