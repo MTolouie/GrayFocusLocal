@@ -242,6 +242,8 @@ namespace Wpf.ViewModels
                 SelectedImagesQueue.Clear();
                 _processedResultsPaths.Clear();
                 ExecutionLog.Clear();
+                TotalPixelsInRange = 0;
+                CalculatedVolumeMessage = "Total Volume: N/A";
 
                 foreach (string file in tiffFiles)
                     SelectedImagesQueue.Add(file);
@@ -733,6 +735,7 @@ namespace Wpf.ViewModels
             ExecutionLog.Clear();
             _processedResultsPaths.Clear();
             TotalPixelsInRange = 0;
+            CalculatedVolumeMessage = "Total Volume: N/A";
 
             // Create a copy of the current queue to process safely
             var imagesToProcess = new List<string>(SelectedImagesQueue);
