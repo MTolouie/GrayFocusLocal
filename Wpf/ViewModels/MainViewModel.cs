@@ -13,7 +13,6 @@ using System.Windows.Input;
 using System.Windows.Media;
 using Wpf.DTOs;
 using Wpf.Entities;
-using System.Linq;
 using Wpf.Services;
 using Wpf.Services.IService;
 using Wpf.Views;
@@ -166,8 +165,6 @@ namespace Wpf.ViewModels
             }
         }
 
-        private readonly System.Collections.Concurrent.ConcurrentQueue<string> _logStageQueue = new();
-        private System.Windows.Threading.DispatcherTimer _logFlushTimer;
 
         // Automatically recalculates whenever any geometric field changes
         partial void OnFodValueChanged(double value) => RecalculateObjectResolution();
@@ -187,27 +184,8 @@ namespace Wpf.ViewModels
             // property setters, so the OnXChanged hooks never fire at startup.
             // Run it once manually so ObjectPixelSizeMicrons isn't left at 0.
             RecalculateObjectResolution();
-
-            _logFlushTimer = new System.Windows.Threading.DispatcherTimer(System.Windows.Threading.DispatcherPriority.Background)
-            {
-                Interval = TimeSpan.FromMilliseconds(100) // Ticks 10 times a second
-            };
-            _logFlushTimer.Tick += FlushLogsToUI;
-            _logFlushTimer.Start();
         }
 
-        // 3. The ultra-efficient consumer that updates the UI in bulk
-        private void FlushLogsToUI(object sender, EventArgs e)
-        {
-            if (_logStageQueue.IsEmpty) return;
-
-            // Turn off collection change notifications momentarily if you have a custom collection,
-            // otherwise just dump them in batch
-            while (_logStageQueue.TryDequeue(out string logLine))
-            {
-                ExecutionLog.Add(logLine);
-            }
-        }
         private void RecalculateObjectResolution()
         {
             if (FodValue <= 0 || FddValue <= 0)
@@ -860,29 +838,25 @@ namespace Wpf.ViewModels
 
                 try
                 {
-                    // Track the last time we updated the layout to avoid over-flooding
-                    DateTime lastLogUpdate = DateTime.MinValue;
-                    var localLogBuffer = new List<string>();
-
+                    // 1. Create the progress callback action
                     Action<ProcessingProgress> progressReporter = (progress) =>
                     {
-                        // 1. Status bar text is updated smoothly
-                        System.Windows.Application.Current?.Dispatcher?.BeginInvoke(
-                            System.Windows.Threading.DispatcherPriority.Background,
-                            new Action(() => { CurrentStatusMessage = progress.Message; }));
-
-                        // 2. Format string and instantly push to the ultra-fast concurrent queue
-                        string logLine = progress.Status == "progress"
-                            ? $"[Step {progress.Step}/{progress.TotalSteps}] {progress.Message}"
-                            : $"[{currentFileName}] [{progress.Status.ToUpper()}] {progress.Message}";
-
-                        _logStageQueue.Enqueue(logLine); // Takes less than a microsecond, zero UI blocking!
+                        Task.Factory.StartNew(() =>
+                        {
+                            CurrentStatusMessage = progress.Message;
+                            if (progress.Status == "progress")
+                            {
+                                ExecutionLog.Add($"[Step {progress.Step}/{progress.TotalSteps}] {progress.Message}");
+                            }
+                            else if (!string.IsNullOrEmpty(progress.Message))
+                            {
+                                ExecutionLog.Add($"[{currentFileName}] [{progress.Status.ToUpper()}] {progress.Message}");
+                            }
+                        }, CancellationToken.None, TaskCreationOptions.None, uiScheduler);
                     };
 
-                    // 2. Pass the original imgPath direct to python backend
+                    // 2. ELIMINATED DISK WRITE: Pass the original imgPath direct to python backend
                     var completed = await _processingService.ProcessImageAsync(sessionId, imgPath, imgIndex, progressReporter);
-
-                    
 
                     if (completed.Status == "completed")
                     {
@@ -893,13 +867,11 @@ namespace Wpf.ViewModels
 
                     if (isCompletedSuccessfully)
                     {
-                        System.Windows.Application.Current?.Dispatcher?.Invoke(() =>
-                        {
-                            ExecutionLog.Add($"✨ [{currentFileName}] Target Found: {targetCountResult} px");
-                            TotalPixelsInRange += targetCountResult;
-                            RecalculateTotalVolume();
-                            SelectedImagesQueue.Remove(imgPath);
-                        });
+                        ExecutionLog.Add($"✨ [{currentFileName}] Target Found: {targetCountResult} px");
+
+                        TotalPixelsInRange += targetCountResult;
+                        RecalculateTotalVolume();
+                        SelectedImagesQueue.Remove(imgPath);
                     }
                     else
                     {
@@ -913,9 +885,7 @@ namespace Wpf.ViewModels
                 }
 
                 imgIndex++;
-                
-                // Bump this to 15ms to allow the OS to catch up on mouse hover events between images
-                await Task.Delay(15);
+                await Task.Delay(10);
             }
 
             if (cts.Token.IsCancellationRequested)
