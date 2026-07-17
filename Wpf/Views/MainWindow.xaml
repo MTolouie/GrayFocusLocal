@@ -138,8 +138,11 @@
                 <TextBlock Text="Python API Execution Log" Style="{StaticResource SubHeaderTextStyle}" Margin="0,5,0,5"/>
 
                 <ListBox Grid.Row="1" 
-                         ItemsSource="{Binding ExecutionLog}" 
-                         Style="{StaticResource TerminalListBoxStyle}"/>
+         ItemsSource="{Binding ExecutionLog}" 
+         Style="{StaticResource TerminalListBoxStyle}"
+         VirtualizingStackPanel.IsVirtualizing="True"
+         VirtualizingStackPanel.VirtualizationMode="Recycling"
+         ScrollViewer.CanContentScroll="True"/>
             </Grid>
         </Border>
 
