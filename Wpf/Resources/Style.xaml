@@ -1,91 +1,99 @@
 ﻿<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
-        <Style x:Key="HeaderTextStyle" TargetType="TextBlock">
-            <Setter Property="FontFamily" Value="Segoe UI"/>
-            <Setter Property="FontSize" Value="13"/>
-            <Setter Property="FontWeight" Value="Bold"/>
-            <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}"/>
-            <Setter Property="VerticalAlignment" Value="Center"/>
-        </Style>
+    <!-- Header Text Style -->
+    <Style x:Key="HeaderTextStyle" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="Segoe UI"/>
+        <Setter Property="FontSize" Value="13"/>
+        <Setter Property="FontWeight" Value="Bold"/>
+        <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
 
-        <Style x:Key="SubHeaderTextStyle" TargetType="TextBlock">
-            <Setter Property="FontFamily" Value="Segoe UI"/>
-            <Setter Property="FontSize" Value="12"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="Foreground" Value="{StaticResource SubtextBrush}"/>
-            <Setter Property="TextAlignment" Value="Center"/>
-        </Style>
+    <!-- Subheader Text Style -->
+    <Style x:Key="SubHeaderTextStyle" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="Segoe UI"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Foreground" Value="{StaticResource SubtextBrush}"/>
+        <Setter Property="TextAlignment" Value="Center"/>
+    </Style>
 
-        <Style x:Key="BodyTextStyle" TargetType="TextBlock">
-            <Setter Property="FontFamily" Value="Segoe UI"/>
-            <Setter Property="FontSize" Value="12"/>
-            <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}"/>
-        </Style>
+    <!-- Body Text Style -->
+    <Style x:Key="BodyTextStyle" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="Segoe UI"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}"/>
+    </Style>
 
-        <Style x:Key="SelectionBoxStyle" TargetType="Rectangle">
-            <Setter Property="Stroke" Value="{StaticResource SelectionBoxStrokeBrush}"/>
-            <Setter Property="StrokeThickness" Value="1.5"/>
-            <Setter Property="StrokeDashArray" Value="3 3"/>
-            <Setter Property="Fill">
-                <Setter.Value>
-                    <SolidColorBrush Color="Red" Opacity="0.5"/>
-                </Setter.Value>
-            </Setter>
-        </Style>
+    <!-- Selection Box Style -->
+    <Style x:Key="SelectionBoxStyle" TargetType="Rectangle">
+        <Setter Property="Stroke" Value="{StaticResource SelectionBoxStrokeBrush}"/>
+        <Setter Property="StrokeThickness" Value="1.5"/>
+        <Setter Property="StrokeDashArray" Value="3 3"/>
+        <Setter Property="Fill">
+            <Setter.Value>
+                <SolidColorBrush Color="Red" Opacity="0.5"/>
+            </Setter.Value>
+        </Setter>
+    </Style>
 
-        <Style x:Key="CardPanelStyle" TargetType="Border">
-            <Setter Property="Background" Value="{StaticResource CardBackgroundBrush}"/>
-            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="CornerRadius" Value="4"/>
-            <Setter Property="Padding" Value="12"/>
-        </Style>
+    <!-- Card Panel Border Style -->
+    <Style x:Key="CardPanelStyle" TargetType="Border">
+        <Setter Property="Background" Value="{StaticResource CardBackgroundBrush}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="4"/>
+        <Setter Property="Padding" Value="12"/>
+    </Style>
 
-        <Style x:Key="StatusPanelStyle" TargetType="Border">
-            <Setter Property="Background" Value="{StaticResource StatusPanelBackgroundBrush}"/>
-            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="CornerRadius" Value="4"/>
-            <Setter Property="Padding" Value="8"/>
-        </Style>
+    <!-- Status Panel Border Style -->
+    <Style x:Key="StatusPanelStyle" TargetType="Border">
+        <Setter Property="Background" Value="{StaticResource StatusPanelBackgroundBrush}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="4"/>
+        <Setter Property="Padding" Value="8"/>
+    </Style>
 
-        <Style x:Key="DarkTextBoxStyle" TargetType="TextBox">
-            <Setter Property="Background" Value="{StaticResource EditorBackgroundBrush}"/>
-            <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}"/>
-            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Padding" Value="5,3"/>
-            <Setter Property="CaretBrush" Value="{StaticResource PrimaryTextBrush}"/>
-            <Setter Property="VerticalContentAlignment" Value="Center"/>
-        </Style>
+    <!-- TextBox Style -->
+    <Style x:Key="DarkTextBoxStyle" TargetType="TextBox">
+        <Setter Property="Background" Value="{StaticResource EditorBackgroundBrush}"/>
+        <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Padding" Value="5,3"/>
+        <Setter Property="CaretBrush" Value="{StaticResource PrimaryTextBrush}"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+    </Style>
 
-        <Style x:Key="TerminalListBoxStyle" TargetType="ListBox">
-            <Setter Property="Background" Value="{StaticResource TerminalBackgroundBrush}"/>
-            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled"/>
-            <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto"/>
-            <Setter Property="ItemContainerStyle">
-                <Setter.Value>
-                    <Style TargetType="ListBoxItem">
-                        <Setter Property="Foreground" Value="{StaticResource TerminalTextBrush}"/>
-                        <Setter Property="FontFamily" Value="Consolas"/>
-                        <Setter Property="FontSize" Value="11.5"/>
-                        <Setter Property="Margin" Value="4,2"/>
-                        <Setter Property="Focusable" Value="False"/>
-                    </Style>
-                </Setter.Value>
-            </Setter>
-        </Style>
+    <!-- Terminal Output Style -->
+    <Style x:Key="TerminalListBoxStyle" TargetType="ListBox">
+        <Setter Property="Background" Value="{StaticResource TerminalBackgroundBrush}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled"/>
+        <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto"/>
+        <Setter Property="ItemContainerStyle">
+            <Setter.Value>
+                <Style TargetType="ListBoxItem">
+                    <Setter Property="Foreground" Value="{StaticResource TerminalTextBrush}"/>
+                    <Setter Property="FontFamily" Value="Consolas"/>
+                    <Setter Property="FontSize" Value="11.5"/>
+                    <Setter Property="Margin" Value="4,2"/>
+                    <Setter Property="Focusable" Value="False"/>
+                </Style>
+            </Setter.Value>
+        </Setter>
+    </Style>
 
+    <!-- Standard Accent Button Style -->
     <Style x:Key="AccentButtonStyle" TargetType="Button">
         <Setter Property="Background" Value="{StaticResource AccentColorBrush}"/>
         <Setter Property="Foreground" Value="White"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
         <Setter Property="BorderThickness" Value="0"/>
         <Setter Property="Focusable" Value="False"/>
-
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
@@ -101,6 +109,39 @@
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter TargetName="border" Property="Background" Value="{StaticResource BorderBrush}"/>
                             <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- NEW: Pure Abort Button Style (No wrapping borders needed!) -->
+    <Style x:Key="AbortButtonStyle" TargetType="Button">
+        <Setter Property="Background" Value="{StaticResource AbortColorBrush}"/>
+        <Setter Property="Foreground" Value="White"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Focusable" Value="False"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="border" 
+                            Background="{TemplateBinding Background}" 
+                            CornerRadius="4">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <!-- Hover State -->
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="border" Property="Background" Value="{StaticResource AbortHoverColorBrush}"/>
+                        </Trigger>
+                        <!-- Disabled/Normal State (When IsProcessing is False) -->
+                        <Trigger Property="IsEnabled" Value="False">
+                            <!-- Match your dark, sleek editor panels so it looks disabled -->
+                            <Setter TargetName="border" Property="Background" Value="#2A2A2D"/>
+                            <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}"/>
+                            <Setter Property="Opacity" Value="0.4"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>

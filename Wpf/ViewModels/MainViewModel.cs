@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -28,6 +29,17 @@ namespace Wpf.ViewModels
         // exact TIFF bytes that will be written to a temp file and handed to
         // process_image() unchanged.
         private RoiResult? _currentRoiResult;
+
+        // --- ABORT / CANCEL SUPPORT ---
+        // Cooperative cancellation for the batch loop in SendImageAsync(). The
+        // Python call for the image currently in flight cannot be forcibly
+        // killed (it's a blocking call under the GIL), so Abort stops the loop
+        // from starting the *next* image and then tears down everything that
+        // has already accumulated (queue, counters, RAM session state).
+        private CancellationTokenSource? _cts;
+
+        // Drives the Abort button's IsEnabled: false at startup, true while a
+        // scan is running, false again once the batch completes or is aborted.
 
         // Cutoff Inputs
         [ObservableProperty] private int _minValue = 10;
@@ -132,6 +144,27 @@ namespace Wpf.ViewModels
 
         // How many preview images the user wants the API to send back
         [ObservableProperty] private int _previewCount = 10;
+
+
+        private bool _isProcessing;
+
+        public bool IsProcessing
+        {
+            get => _isProcessing;
+            set
+            {
+                if (SetProperty(ref _isProcessing, value))
+                {
+                    // Marshal the state change update back to the UI Thread instantly!
+                    System.Windows.Application.Current?.Dispatcher?.BeginInvoke(new Action(() =>
+                    {
+                        AbortProcessingCommand.NotifyCanExecuteChanged();
+                        SendImageCommand.NotifyCanExecuteChanged(); // Disables the Scan button during processing too!
+                    }));
+                }
+            }
+        }
+
 
         // Automatically recalculates whenever any geometric field changes
         partial void OnFodValueChanged(double value) => RecalculateObjectResolution();
@@ -737,6 +770,12 @@ namespace Wpf.ViewModels
             TotalPixelsInRange = 0;
             CalculatedVolumeMessage = "Total Volume: N/A";
 
+            // Arm cancellation for this run. This is what the Abort button's
+            // IsEnabled is bound to (via IsProcessing) and what it triggers.
+            _cts = new CancellationTokenSource();
+            var cts = _cts;
+            IsProcessing = true;
+
             // Create a copy of the current queue to process safely
             var imagesToProcess = new List<string>(SelectedImagesQueue);
             var sessionId = Guid.NewGuid().ToString();
@@ -757,6 +796,9 @@ namespace Wpf.ViewModels
                 CurrentStatusMessage = $"Something Went Wrong.";
                 ExecutionLog.Add($"❌ [Could not start the local processing session. {result.message}]");
                 MessageBox.Show("Failed to initiate processing. Please check the local processing engine and try again.", "Processing Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                IsProcessing = false;
+                _cts?.Dispose();
+                _cts = null;
                 return;
             }
 
@@ -766,6 +808,14 @@ namespace Wpf.ViewModels
 
             foreach (var imgPath in imagesToProcess)
             {
+                if (cts.Token.IsCancellationRequested)
+                {
+                    // Abort was requested. The image that was already in
+                    // flight (if any) finishes on its own, but we don't touch
+                    // its result and we don't start any further images.
+                    break;
+                }
+
                 string currentFileName = Path.GetFileName(imgPath);
 
                 // Update active image path and clear shapes for this batch step
@@ -835,7 +885,16 @@ namespace Wpf.ViewModels
                 }
 
                 imgIndex++;
+                await Task.Delay(1);
             }
+
+            if (cts.Token.IsCancellationRequested)
+            {
+                await HandleAbortCleanupAsync(sessionId);
+                return;
+            }
+
+            IsProcessing = false;
 
             // Once the batch run is complete
             if (SelectedImagesQueue.Count > 0)
@@ -882,6 +941,63 @@ namespace Wpf.ViewModels
 
                 resultWin.Show();
             }
+        }
+
+        // --- ABORT / CANCEL COMMAND ---
+        // Bound to the Abort button, which is only enabled while IsProcessing
+        // is true (i.e. between "Scan Target Region" being clicked and the
+        // batch finishing). Requests cancellation; the currently in-flight
+        // image (if any) is allowed to finish since the Python call is
+        // blocking, but no further image is started, and everything gathered
+        // so far — queue, running pixel/volume totals, and the Python-side
+        // in-memory session (including any analyzed preview sitting there
+        // waiting to be pulled) — gets torn down in HandleAbortCleanupAsync.
+        [RelayCommand(CanExecute = nameof(CanAbortProcessing))]
+        private void AbortProcessing()
+        {
+            if (!IsProcessing || _cts == null) return;
+
+            CurrentStatusMessage = "Cancelling — finishing current image...";
+            ExecutionLog.Add("🛑 Abort requested by user.");
+            _cts.Cancel();
+        }
+
+        private bool CanAbortProcessing() => IsProcessing;
+
+        // The [ObservableProperty]-generated IsProcessing setter calls this
+        // automatically whenever IsProcessing changes, so the Abort button's
+        // enabled state stays in sync with the command's own CanExecute
+        // instead of fighting a separate IsEnabled binding.
+
+        private async Task HandleAbortCleanupAsync(string sessionId)
+        {
+            // Erase the analyzed/pending data sitting in the Python engine's
+            // RAM for this session (in-progress numpy arrays, previews, etc.)
+            try
+            {
+                await _processingService.CleanUpDataAsync(sessionId);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Failed to clean up aborted session: {ex.Message}");
+            }
+
+            // Reset the batch queue and every accumulated result
+            SelectedImagesQueue.Clear();
+            _processedResultsPaths.Clear();
+            TotalPixelsInRange = 0;
+            CalculatedVolumeMessage = "Total Volume: N/A";
+
+            ImagePath = null;
+            ImageDisplayTitle = "Original Photo (No images left in queue)";
+            ClearSelectionAndShapes();
+
+            ExecutionLog.Add("--- OPERATION ABORTED ---");
+            CurrentStatusMessage = "Operation aborted.";
+
+            IsProcessing = false;
+            _cts?.Dispose();
+            _cts = null;
         }
 
         // Add this command inside your MainViewModel class
