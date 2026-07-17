@@ -236,6 +236,11 @@
                 Command="{Binding SendImageCommand}"
                 Style="{StaticResource AccentButtonStyle}"
                 Margin="0,0,0,15" Height="40"/>
+                            <Button Content="Abort / Cancel Operation"
+Command="{Binding AbortProcessingCommand}"
+Style="{StaticResource AbortButtonStyle}"
+Height="40" 
+Margin="0,0,0,15"/>
 
                             <Grid>
                                 <Grid.ColumnDefinitions>
@@ -305,6 +310,7 @@
                         </StackPanel>
                     </Border>
 
+                    
                 </StackPanel>
             </StackPanel>
 
