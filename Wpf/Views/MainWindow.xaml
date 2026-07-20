@@ -142,7 +142,8 @@
          Style="{StaticResource TerminalListBoxStyle}"
          VirtualizingStackPanel.IsVirtualizing="True"
          VirtualizingStackPanel.VirtualizationMode="Recycling"
-         ScrollViewer.CanContentScroll="True"/>
+         ScrollViewer.CanContentScroll="True"
+         helpers:ListBoxBehavior.AutoScrollToBottom="True"/>
             </Grid>
         </Border>
 
