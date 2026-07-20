@@ -762,7 +762,6 @@ namespace Wpf.ViewModels
             int minVal = _currentRoiResult.MinValue;
             int maxVal = _currentRoiResult.MaxValue;
 
-            // Get the base folder directory from the first image in queue
             string? folderPath = Path.GetDirectoryName(ImagePath);
             if (string.IsNullOrEmpty(folderPath)) return;
 
@@ -772,6 +771,7 @@ namespace Wpf.ViewModels
             CalculatedVolumeMessage = "Total Volume: N/A";
 
             _cts = new CancellationTokenSource();
+            var cts = _cts; // Local copy for safety inside callbacks
             IsProcessing = true;
 
             var sessionId = Guid.NewGuid().ToString();
@@ -794,11 +794,22 @@ namespace Wpf.ViewModels
 
             var uiScheduler = TaskScheduler.FromCurrentSynchronizationContext();
 
+            // Keep track of how many items have completed processing
+            int processedItemsCount = 0;
+            int totalImages = SelectedImagesQueue.Count;
+
             try
             {
-                // 1. Progress Reporter handles updates pushed from Python's background threads
                 Action<ProcessingProgress> progressReporter = (progress) =>
                 {
+                    // --- CRITICAL CANCELLATION CHECK ---
+                    // If user pressed "Abort", this callback intercepts the next reporting thread
+                    // and halts the entire operation instantly.
+                    if (cts.Token.IsCancellationRequested)
+                    {
+                        throw new OperationCanceledException(cts.Token);
+                    }
+
                     Task.Factory.StartNew(() =>
                     {
                         if (progress.Status == "progress")
@@ -808,10 +819,36 @@ namespace Wpf.ViewModels
                         }
                         else if (progress.Status == "completed")
                         {
-                            // Thread-safe accumulation of total pixels as they complete
+                            processedItemsCount++;
+                            int remaining = totalImages - processedItemsCount;
+
+                            // Update metrics
                             TotalPixelsInRange += progress.ImagePixelsInRange;
                             RecalculateTotalVolume();
+
                             ExecutionLog.Add($"✨ [Processed Slice] Target Found: {progress.ImagePixelsInRange} px");
+
+                            // Try to advance the UI view to display the image that just finished
+                            // or remove it gracefully from the visual collection queue.
+                            //if (SelectedImagesQueue.Count > 0)
+                            //{
+                            //    // Match by filename logic to safely remove the file that just finished
+                            //    string completedFile = SelectedImagesQueue.FirstOrDefault(f =>
+                            //        Path.GetFileName(f).Equals(progress.SavedPreviewId, StringComparison.OrdinalIgnoreCase) ||
+                            //        f.EndsWith(progress.SavedPreviewId ?? "", StringComparison.OrdinalIgnoreCase));
+
+                            //    if (!string.IsNullOrEmpty(completedFile))
+                            //    {
+                            //        SelectedImagesQueue.Remove(completedFile);
+                            //    }
+                            //}
+
+                            // Update titles dynamically to reflect true batch progression status
+                            if (SelectedImagesQueue.Count > 0)
+                            {
+                                ImagePath = SelectedImagesQueue[0]; // Set next image on screen
+                                ImageDisplayTitle = $"Original Photo ({Path.GetFileName(ImagePath)}) - {remaining} remaining";
+                            }
                         }
                         else if (progress.Status == "error")
                         {
@@ -822,10 +859,10 @@ namespace Wpf.ViewModels
 
                 CurrentStatusMessage = "Bulk processing entire directory in parallel...";
 
-                // 2. RUN BULK FOLDER PIPELINE
+                // Execute the bulk folder background task
                 SessionResultsDTO sessionSummary = await _processingService.ProcessFolderAsync(sessionId, folderPath, progressReporter);
 
-                // 3. POST-PROCESSING SUMMARY (Replaces the old post-loop completion block)
+                // --- BATCH SUCCESS ROUTINE ---
                 IsProcessing = false;
                 SelectedImagesQueue.Clear();
                 ImagePath = string.Empty;
@@ -833,14 +870,12 @@ namespace Wpf.ViewModels
                 CurrentStatusMessage = "All images processed successfully!";
                 ExecutionLog.Add("--- PARALLEL BATCH RUN COMPLETE ---");
 
-                // Re-read total directly from Python to ensure absolute calculation sync
                 TotalPixelsInRange = sessionSummary.GlobalTotalPixels;
                 RecalculateTotalVolume();
                 ExecutionLog.Add($"📦 {CalculatedVolumeMessage}");
 
                 ClearSelectionAndShapes();
 
-                // Populate results window with binned previews
                 _processedResultsPaths.Clear();
                 for (int i = 0; i < sessionSummary.PeriodicPreviews.Count; i++)
                 {
@@ -857,6 +892,11 @@ namespace Wpf.ViewModels
                 };
 
                 resultWin.Show();
+            }
+            catch (Exception ex) when (ex is OperationCanceledException || ex.InnerException is OperationCanceledException)
+            {
+                // Intercepts the custom cancel throw and safely handles the reset state
+                await HandleAbortCleanupAsync(sessionId);
             }
             catch (Exception ex)
             {
