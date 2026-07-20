@@ -753,193 +753,116 @@ namespace Wpf.ViewModels
                 return;
             }
 
-            // Ensure we have an active ROI calculation to establish the target range
             if (_currentRoiResult == null || !_currentRoiResult.HasPixels)
             {
-                MessageBox.Show("Please draw a valid selection area to parse regional threshold levels first.",
-                                "Invalid Selection Bounds", MessageBoxButton.OK, MessageBoxImage.Warning);
+                MessageBox.Show("Please draw a valid selection area first.", "Invalid Selection Bounds", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
 
-            // Capture the min/max values derived from the first selection
             int minVal = _currentRoiResult.MinValue;
             int maxVal = _currentRoiResult.MaxValue;
+
+            // Get the base folder directory from the first image in queue
+            string? folderPath = Path.GetDirectoryName(ImagePath);
+            if (string.IsNullOrEmpty(folderPath)) return;
 
             ExecutionLog.Clear();
             _processedResultsPaths.Clear();
             TotalPixelsInRange = 0;
             CalculatedVolumeMessage = "Total Volume: N/A";
 
-            // Arm cancellation for this run. This is what the Abort button's
-            // IsEnabled is bound to (via IsProcessing) and what it triggers.
             _cts = new CancellationTokenSource();
-            var cts = _cts;
             IsProcessing = true;
 
-            // Create a copy of the current queue to process safely
-            var imagesToProcess = new List<string>(SelectedImagesQueue);
             var sessionId = Guid.NewGuid().ToString();
-
             var scanRequest = new ScanRequestDTO
             {
                 SessionId = sessionId,
                 MinValue = minVal,
                 MaxValue = maxVal,
-                total_expected_images = imagesToProcess.Count,
+                total_expected_images = SelectedImagesQueue.Count,
                 preview_count = PreviewCount
             };
 
             var result = await _processingService.SendDataAsync(scanRequest);
-
             if (result.status != "started")
             {
-                CurrentStatusMessage = $"Something Went Wrong.";
-                ExecutionLog.Add($"❌ [Could not start the local processing session. {result.message}]");
-                MessageBox.Show("Failed to initiate processing. Please check the local processing engine and try again.", "Processing Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                CurrentStatusMessage = "Something Went Wrong.";
                 IsProcessing = false;
-                _cts?.Dispose();
-                _cts = null;
                 return;
             }
 
-            // Capture the WPF UI thread scheduler so our progress callback can safely update properties
             var uiScheduler = TaskScheduler.FromCurrentSynchronizationContext();
-            int imgIndex = 0;
 
-            foreach (var imgPath in imagesToProcess)
+            try
             {
-                if (cts.Token.IsCancellationRequested)
+                // 1. Progress Reporter handles updates pushed from Python's background threads
+                Action<ProcessingProgress> progressReporter = (progress) =>
                 {
-                    // Abort was requested. The image that was already in
-                    // flight (if any) finishes on its own, but we don't touch
-                    // its result and we don't start any further images.
-                    break;
-                }
-
-                string currentFileName = Path.GetFileName(imgPath);
-
-                // Update active image path and clear shapes for this batch step
-                ImagePath = imgPath;
-                RectVisibility = Visibility.Collapsed;
-                PolygonPoints = new PointCollection();
-                PolygonVisibility = Visibility.Collapsed;
-                TempLineVisibility = Visibility.Collapsed;
-                FreehandPoints = new PointCollection();
-                FreehandVisibility = Visibility.Collapsed;
-                _isFreehandDrawing = false;
-                FreehandFillBrush = Brushes.Transparent;
-
-                ImageDisplayTitle = $"Original Photo ({currentFileName}) - {SelectedImagesQueue.Count} remaining";
-                CurrentStatusMessage = $"Processing {currentFileName} in-memory...";
-
-                bool isCompletedSuccessfully = false;
-                string? savedImagePathResult = null;
-                int targetCountResult = 0;
-
-                try
-                {
-                    // 1. Create the progress callback action
-                    Action<ProcessingProgress> progressReporter = (progress) =>
+                    Task.Factory.StartNew(() =>
                     {
-                        Task.Factory.StartNew(() =>
+                        if (progress.Status == "progress")
                         {
                             CurrentStatusMessage = progress.Message;
-                            if (progress.Status == "progress")
-                            {
-                                ExecutionLog.Add($"[Step {progress.Step}/{progress.TotalSteps}] {progress.Message}");
-                            }
-                            else if (!string.IsNullOrEmpty(progress.Message))
-                            {
-                                ExecutionLog.Add($"[{currentFileName}] [{progress.Status.ToUpper()}] {progress.Message}");
-                            }
-                        }, CancellationToken.None, TaskCreationOptions.None, uiScheduler);
-                    };
+                            ExecutionLog.Add($"[Step {progress.Step}/{progress.TotalSteps}] {progress.Message}");
+                        }
+                        else if (progress.Status == "completed")
+                        {
+                            // Thread-safe accumulation of total pixels as they complete
+                            TotalPixelsInRange += progress.ImagePixelsInRange;
+                            RecalculateTotalVolume();
+                            ExecutionLog.Add($"✨ [Processed Slice] Target Found: {progress.ImagePixelsInRange} px");
+                        }
+                        else if (progress.Status == "error")
+                        {
+                            ExecutionLog.Add($"❌ Error processing slice: {progress.Message}");
+                        }
+                    }, CancellationToken.None, TaskCreationOptions.None, uiScheduler);
+                };
 
-                    // 2. ELIMINATED DISK WRITE: Pass the original imgPath direct to python backend
-                    var completed = await _processingService.ProcessImageAsync(sessionId, imgPath, imgIndex, progressReporter);
+                CurrentStatusMessage = "Bulk processing entire directory in parallel...";
 
-                    if (completed.Status == "completed")
-                    {
-                        savedImagePathResult = completed.SavedPreviewId;
-                        targetCountResult = completed.ImagePixelsInRange;
-                        isCompletedSuccessfully = true;
-                    }
+                // 2. RUN BULK FOLDER PIPELINE
+                SessionResultsDTO sessionSummary = await _processingService.ProcessFolderAsync(sessionId, folderPath, progressReporter);
 
-                    if (isCompletedSuccessfully)
-                    {
-                        ExecutionLog.Add($"✨ [{currentFileName}] Target Found: {targetCountResult} px");
-
-                        TotalPixelsInRange += targetCountResult;
-                        RecalculateTotalVolume();
-                        SelectedImagesQueue.Remove(imgPath);
-                    }
-                    else
-                    {
-                        ExecutionLog.Add($"❌ [{currentFileName}] Failed to process completely.");
-                    }
-                }
-                catch (Exception ex)
-                {
-                    ExecutionLog.Add($"❌ Pipeline Fault on {currentFileName}: {ex.Message}");
-                    CurrentStatusMessage = $"Processing error on {currentFileName}.";
-                }
-
-                imgIndex++;
-                await Task.Delay(10);
-            }
-
-            if (cts.Token.IsCancellationRequested)
-            {
-                await HandleAbortCleanupAsync(sessionId);
-                return;
-            }
-
-            IsProcessing = false;
-
-            // Once the batch run is complete
-            if (SelectedImagesQueue.Count > 0)
-            {
-                LoadNextImageFromQueue();
-            }
-            else
-            {
+                // 3. POST-PROCESSING SUMMARY (Replaces the old post-loop completion block)
+                IsProcessing = false;
+                SelectedImagesQueue.Clear();
                 ImagePath = string.Empty;
-                ImageDisplayTitle = "Original Photo (No images left in queue)";
+                ImageDisplayTitle = "Original Photo (All images processed)";
                 CurrentStatusMessage = "All images processed successfully!";
-                ExecutionLog.Add("--- BATCH RUN COMPLETE ---");
+                ExecutionLog.Add("--- PARALLEL BATCH RUN COMPLETE ---");
+
+                // Re-read total directly from Python to ensure absolute calculation sync
+                TotalPixelsInRange = sessionSummary.GlobalTotalPixels;
+                RecalculateTotalVolume();
                 ExecutionLog.Add($"📦 {CalculatedVolumeMessage}");
 
                 ClearSelectionAndShapes();
 
-                // 1. Get the final, optimized preview names chosen by Python's dynamic binning algorithm
-                SessionResultsDTO sessionSummary = await _processingService.GetSessionResultsAsync(sessionId);
-
-                // 2. Clear the list so we only display the final binned previews
+                // Populate results window with binned previews
                 _processedResultsPaths.Clear();
-
-                // 3. Populate using the local 'sessionId' variable
                 for (int i = 0; i < sessionSummary.PeriodicPreviews.Count; i++)
                 {
                     string previewPath = sessionSummary.PeriodicPreviews[i];
                     _processedResultsPaths.Add((sessionId, previewPath, previewPath));
                 }
+
                 var resultWin = _resultWindowFactory.Create(_processedResultsPaths);
                 resultWin.Owner = System.Windows.Application.Current.MainWindow;
-
-                // Clean up the Python session's in-memory state when the user is done viewing
                 resultWin.Closed += async (s, e) =>
                 {
-                    try
-                    {
-                        await _processingService.CleanUpDataAsync(sessionId);
-                    }
-                    catch (Exception ex)
-                    {
-                        System.Diagnostics.Debug.WriteLine($"Failed to clean up session: {ex.Message}");
-                    }
+                    try { await _processingService.CleanUpDataAsync(sessionId); }
+                    catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"CleanUp Error: {ex.Message}"); }
                 };
 
                 resultWin.Show();
+            }
+            catch (Exception ex)
+            {
+                ExecutionLog.Add($"❌ Bulk Pipeline Fault: {ex.Message}");
+                CurrentStatusMessage = "Processing error occurred.";
+                IsProcessing = false;
             }
         }
 

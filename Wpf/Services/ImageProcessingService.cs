@@ -84,6 +84,52 @@ namespace Wpf.Services
             });
         }
 
+        public Task<SessionResultsDTO> ProcessFolderAsync(string sessionId, string folderPath, Action<ProcessingProgress> progressReporter)
+        {
+            return Task.Run(() =>
+            {
+                using (Py.GIL())
+                {
+                    // 1. Wrap the progress callback to report live steps from parallel workers
+                    Action<object> pyCallback = (pyPayload) =>
+                    {
+                        PyObject pyObj = (PyObject)pyPayload;
+                        ProcessingProgress progress = MapProgress(pyObj);
+                        progressReporter?.Invoke(progress);
+                    };
+
+                    // 2. Call the bulk process method in grayscale_clr.py
+                    dynamic resultsDict = _engine.Processor.process_images(sessionId, folderPath, pyCallback);
+                    PyObject pyObj = (PyObject)resultsDict;
+
+                    // 3. Parse and return the final SessionResultsDTO directly
+                    var results = new SessionResultsDTO();
+                    using (PyObject pySessionId = pyObj.GetItem("session_id"))
+                    using (PyObject pyProcessedCount = pyObj.GetItem("total_images_processed"))
+                    using (PyObject pyGlobalPixels = pyObj.GetItem("global_total_pixels"))
+                    using (PyObject pyPeriodicPreviews = pyObj.GetItem("periodic_previews"))
+                    {
+                        results.SessionId = pySessionId.ToString();
+                        results.TotalImagesProcessed = pyProcessedCount.As<int>();
+                        results.GlobalTotalPixels = pyGlobalPixels.As<long>();
+
+                        var previewsList = new System.Collections.Generic.List<string>();
+                        int listLength = (int)pyPeriodicPreviews.Length();
+                        for (int i = 0; i < listLength; i++)
+                        {
+                            using (PyObject item = pyPeriodicPreviews.GetItem(i))
+                            {
+                                previewsList.Add(item.ToString());
+                            }
+                        }
+                        results.PeriodicPreviews = previewsList;
+                    }
+
+                    return results;
+                }
+            });
+        }
+
         public Task<PreviewImageData> GetPreviewImageAsync(string sessionId, string previewId)
         {
             return Task.Run(() =>

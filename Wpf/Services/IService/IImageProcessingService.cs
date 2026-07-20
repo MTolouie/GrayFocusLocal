@@ -25,5 +25,7 @@ namespace Wpf.Services.IService
         Task<SessionResultsDTO> GetSessionResultsAsync(string sessionId);
 
         Task CleanUpDataAsync(string sessionId);
+
+        Task<SessionResultsDTO> ProcessFolderAsync(string sessionId, string folderPath, Action<ProcessingProgress> progressReporter);
     }
 }
