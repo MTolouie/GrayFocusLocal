@@ -64,6 +64,7 @@ import os
 # pyrefly: ignore [missing-import]
 import cv2
 import numpy as np
+import threading
 
 
 # ---------------------------------------------------------------------------
@@ -122,6 +123,7 @@ class GrayscaleProcessor:
         max_val: int,
         total_expected_images: int = 0,
         preview_count: int = 10,
+        reporting_level: str = "steps",
     ) -> None:
         """
         Yeni bir işleme oturumu oluşturur (veya sıfırlar).
@@ -134,6 +136,7 @@ class GrayscaleProcessor:
             "max_val": max_val,
             "total_expected_images": total_expected_images,
             "preview_count": max(1, preview_count),
+            "reporting_level": str(reporting_level).lower(),
             "processed_count": 0,
             "global_total_pixels": 0,
             # Küme-kova önizleme durumu
@@ -141,6 +144,7 @@ class GrayscaleProcessor:
             "preview_slots":  {},   # slot_idx → {"id": str, "pixels": int}
             "pixel_min": None,      # sıfır-dışı piksel sayılarının cçalışan min’i
             "pixel_max": None,      # sıfır-dışı piksel sayılarının cçalışan max’i
+            "lock": threading.Lock(),
         }
 
     def get_session_results(self, session_id: str) -> dict:
@@ -236,6 +240,12 @@ class GrayscaleProcessor:
 
         def _output(payload: dict) -> None:
             if progress_callback is not None:
+                level = session.get("reporting_level", "steps")
+                if level == "none":
+                    return
+                status = payload.get("status", "")
+                if level == "completed" and status == "progress":
+                    return
                 progress_callback(payload)
 
         # --- Koruma: oturum var mı? ---
@@ -243,8 +253,9 @@ class GrayscaleProcessor:
         if session is None:
             raise KeyError(f"'{session_id}' oturumu başlatılmamış.")
 
-        session["processed_count"] += 1
-        current_idx = session["processed_count"]
+        with session["lock"]:
+            session["processed_count"] += 1
+            current_idx = session["processed_count"]
 
         # ── Adım 1: Dosya okuma ────────────────────────────────────────
         _output({
@@ -285,93 +296,174 @@ class GrayscaleProcessor:
 
         mask            = cv2.inRange(img, min_val, max_val)
         pixels_in_range = int(np.count_nonzero(mask))
-        session["global_total_pixels"] += pixels_in_range
 
-        _output({
-            "status": "progress",
-            "step": 4,
-            "total_steps": 4,
-            "message": (
-                f"{pixels_in_range} piksel bulundu. "
-                f"Genel toplam: {session['global_total_pixels']}."
-            ),
-        })
+        with session["lock"]:
+            session["global_total_pixels"] += pixels_in_range
 
-        # ── Seçim: küme kovaları – sıfır piksellik görüntüler dışlanir ────────
-        saved_preview_id = None
+            _output({
+                "status": "progress",
+                "step": 4,
+                "total_steps": 4,
+                "message": (
+                    f"{pixels_in_range} piksel bulundu. "
+                    f"Genel toplam: {session['global_total_pixels']}."
+                ),
+            })
 
-        if pixels_in_range > 0:
-            px            = pixels_in_range
-            n             = session["preview_count"]
+            # ── Seçim: küme kovaları – sıfır piksellik görüntüler dışlanir ────────
+            saved_preview_id = None
 
-            # Çalışan piksel-aralığını güncelle
-            range_expanded = False
-            if session["pixel_min"] is None or px < session["pixel_min"]:
-                session["pixel_min"] = px
-                range_expanded = True
-            if session["pixel_max"] is None or px > session["pixel_max"]:
-                session["pixel_max"] = px
-                range_expanded = True
+            if pixels_in_range > 0:
+                px            = pixels_in_range
+                n             = session["preview_count"]
 
-            pmin = session["pixel_min"]
-            pmax = session["pixel_max"]
+                # Çalışan piksel-aralığını güncelle
+                range_expanded = False
+                if session["pixel_min"] is None or px < session["pixel_min"]:
+                    session["pixel_min"] = px
+                    range_expanded = True
+                if session["pixel_max"] is None or px > session["pixel_max"]:
+                    session["pixel_max"] = px
+                    range_expanded = True
 
-            # ... lines 318-334 inside process_image ...
-            if range_expanded and session["preview_slots"]:
-                old_slots = dict(session["preview_slots"])
-                session["preview_slots"] = {}
-                
-                for item in old_slots.values():
-                    new_slot = _slot_for(item["pixels"], pmin, pmax, n)
-                    existing = session["preview_slots"].get(new_slot)
+                pmin = session["pixel_min"]
+                pmax = session["pixel_max"]
+
+                if range_expanded and session["preview_slots"]:
+                    old_slots = dict(session["preview_slots"])
+                    session["preview_slots"] = {}
                     
-                    if existing is None:
-                        session["preview_slots"][new_slot] = item
-                    else:
-                        center = _slot_center(new_slot, pmin, pmax, n)
-                        if abs(item["pixels"] - center) < abs(existing["pixels"] - center):
-                            # item is closer to center: delete existing, keep item
-                            if existing["id"] in session["preview_images"]:
-                                del session["preview_images"][existing["id"]]
+                    for item in old_slots.values():
+                        new_slot = _slot_for(item["pixels"], pmin, pmax, n)
+                        existing = session["preview_slots"].get(new_slot)
+                        
+                        if existing is None:
                             session["preview_slots"][new_slot] = item
                         else:
-                            # existing is closer: delete item, keep existing
-                            if item["id"] in session["preview_images"]:
-                                del session["preview_images"][item["id"]]
+                            center = _slot_center(new_slot, pmin, pmax, n)
+                            if abs(item["pixels"] - center) < abs(existing["pixels"] - center):
+                                # item is closer to center: delete existing, keep item
+                                if existing["id"] in session["preview_images"]:
+                                    del session["preview_images"][existing["id"]]
+                                session["preview_slots"][new_slot] = item
+                            else:
+                                # existing is closer: delete item, keep existing
+                                if item["id"] in session["preview_images"]:
+                                    del session["preview_images"][item["id"]]
 
-            # Geçerli görüntünün hedef kovasını belirle
-            target_slot = _slot_for(px, pmin, pmax, n)
-            existing    = session["preview_slots"].get(target_slot)
-            center      = _slot_center(target_slot, pmin, pmax, n)
+                # Geçerli görüntünün hedef kovasını belirle
+                target_slot = _slot_for(px, pmin, pmax, n)
+                existing    = session["preview_slots"].get(target_slot)
+                center      = _slot_center(target_slot, pmin, pmax, n)
 
-            keep = (
-                existing is None
-                or abs(px - center) < abs(existing["pixels"] - center)
-            )
+                keep = (
+                    existing is None
+                    or abs(px - center) < abs(existing["pixels"] - center)
+                )
 
-            if keep:
-                # Yolnızca önizleme için 8-bit'e dönüştür
-                img_8bit  = (img >> 8).astype(np.uint8)
-                img_color = cv2.cvtColor(img_8bit, cv2.COLOR_GRAY2BGR)
-                img_color[mask > 0] = [0, 0, 255]
+                if keep:
+                    # Yolnızca önizleme için 8-bit'e dönüştür
+                    img_8bit  = (img >> 8).astype(np.uint8)
+                    img_color = cv2.cvtColor(img_8bit, cv2.COLOR_GRAY2BGR)
+                    img_color[mask > 0] = [0, 0, 255]
 
-                preview_id = os.path.basename(image_path)
+                    preview_id = os.path.basename(image_path)
 
-                if existing is not None:
-                    # Mevcut kova sahibini bellekten çıkar
-                    del session["preview_images"][existing["id"]]
+                    if existing is not None:
+                        # Mevcut kova sahibini bellekten çıkar
+                        del session["preview_images"][existing["id"]]
 
-                session["preview_images"][preview_id] = img_color
-                session["preview_slots"][target_slot]  = {"id": preview_id, "pixels": px}
-                saved_preview_id = preview_id
+                    session["preview_images"][preview_id] = img_color
+                    session["preview_slots"][target_slot]  = {"id": preview_id, "pixels": px}
+                    saved_preview_id = preview_id
 
-        # ── Tamamlandı – yerel dict döndür ────────────────────────────
-        result = {
-            "status": "completed",
-            "session_id": session_id,
-            "image_pixels_in_range": pixels_in_range,
-            "global_total_pixels": session["global_total_pixels"],
-            "saved_preview_id": saved_preview_id,  # çoğu görüntü için None
-        }
-        _output(result)
-        return result
+            # ── Tamamlandı – yerel dict döndür ────────────────────────────
+            result = {
+                "status": "completed",
+                "session_id": session_id,
+                "image_pixels_in_range": pixels_in_range,
+                "global_total_pixels": session["global_total_pixels"],
+                "saved_preview_id": saved_preview_id,  # çoğu görüntü için None
+            }
+            _output(result)
+            return result
+
+    def process_images(
+        self,
+        session_id: str,
+        image_paths,
+        progress_callback=None,
+        max_workers: int = None,
+    ) -> dict:
+        """
+        Birden çok görüntüyü veya bir klasörü ThreadPoolExecutor kullanarak paralel (eş zamanlı) olarak işler.
+        Oturum nesnesine thread-safe olarak erişilir ve I/O/hesaplama adımlarında GIL serbest bırakılır.
+
+        Parametreler
+        ------------
+        session_id        : start_session() ile oluşturulan aktif oturum
+        image_paths       : İşlenecek görüntü dosya yollarının listesi, tek bir klasör yolu (str), veya her ikisinin karışımı.
+        progress_callback : Her görüntü tamamlandığında/güncellendiğinde çağrılan callback
+        max_workers       : Eşzamanlı çalışacak maksimum thread sayısı (None ise CPU çekirdek sayısına göre)
+        """
+        session = _sessions.get(session_id)
+        if session is None:
+            raise KeyError(f"'{session_id}' oturumu başlatılmamış.")
+
+        import glob
+
+        # Dizin altındaki resimleri listeleme yardımcısı
+        def _get_images_from_dir(dpath):
+            extensions = ['*.tif', '*.tiff', '*.png', '*.jpg', '*.jpeg', '*.bmp']
+            found_paths = []
+            for ext in extensions:
+                found_paths.extend(glob.glob(os.path.join(dpath, ext)))
+                found_paths.extend(glob.glob(os.path.join(dpath, ext.upper())))
+            return sorted(list(set(found_paths)))
+
+        # Girdi çözümleme
+        resolved_paths = []
+        if isinstance(image_paths, str):
+            if os.path.isdir(image_paths):
+                resolved_paths = _get_images_from_dir(image_paths)
+            else:
+                resolved_paths = [image_paths]
+        else:
+            for p in image_paths:
+                if os.path.isdir(p):
+                    resolved_paths.extend(_get_images_from_dir(p))
+                else:
+                    resolved_paths.append(p)
+
+        image_paths = resolved_paths
+
+        if not image_paths:
+            raise FileNotFoundError(f"Oturum [{session_id}]: İşlenecek geçerli görüntü dosyası bulunamadı.")
+
+        # Eğer oturum oluşturulurken 'total_expected_images' 0 verildiyse ve artık toplam sayıyı
+        # biliyorsak, oturumu bu gerçek sayı ile güncelle/yeniden başlat ki step_size doğru hesaplansın.
+        with session["lock"]:
+            if session.get("total_expected_images", 0) == 0:
+                session["total_expected_images"] = len(image_paths)
+
+        from concurrent.futures import ThreadPoolExecutor
+
+        def _worker_task(image_path: str):
+            try:
+                return self.process_image(session_id, image_path, progress_callback)
+            except Exception as e:
+                err_payload = {
+                    "status": "error",
+                    "session_id": session_id,
+                    "image_path": image_path,
+                    "message": str(e)
+                }
+                if progress_callback is not None:
+                    progress_callback(err_payload)
+                return err_payload
+
+        # ThreadPoolExecutor kullanarak işleri paralel koştur
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            list(executor.map(_worker_task, image_paths))
+
+        return self.get_session_results(session_id)

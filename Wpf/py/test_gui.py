@@ -9,6 +9,7 @@ Tkinter tabanlı test arayüzü – grayscale_clr.GrayscaleProcessor
 
 import sys
 import os
+import time
 import threading
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
@@ -163,6 +164,7 @@ class App(tk.Tk):
         self.var_max     = tk.IntVar(value=200)
         self.var_total   = tk.IntVar(value=0)
         self.var_prev    = tk.IntVar(value=5)
+        self.var_level   = tk.StringVar(value="steps")
 
         rows = [
             ("Session ID",       self.var_session, "entry"),
@@ -170,13 +172,22 @@ class App(tk.Tk):
             ("Max Değer (0-65535)", self.var_max, "spin"),
             ("Toplam Görüntü (0=bilinmiyor)", self.var_total, "spin"),
             ("Preview Sayısı",   self.var_prev, "spin"),
+            ("Raporlama Seviyesi", self.var_level, "option"),
         ]
         for i, (lbl, var, kind) in enumerate(rows):
             label(grid, lbl, fg=TEXT_DIM, bg=CARD).grid(row=i, column=0, sticky="w", pady=3, padx=4)
             if kind == "entry":
                 w = styled_entry(grid, textvariable=var, width=18)
-            else:
+            elif kind == "spin":
                 w = styled_spinbox(grid, 0, 65535, var)
+            elif kind == "option":
+                w = tk.OptionMenu(grid, var, "steps", "completed", "none")
+                w.config(
+                    bg="#2b2f45", fg=TEXT, activebackground=ACCENT, activeforeground="white",
+                    relief="flat", bd=0, highlightthickness=1, highlightbackground=BORDER,
+                    width=15, font=FONT_BODY, cursor="hand2"
+                )
+                w["menu"].config(bg="#2b2f45", fg=TEXT, font=FONT_BODY, activebackground=ACCENT)
             w.grid(row=i, column=1, sticky="e", pady=3, padx=4)
 
         btn_row = styled_frame(c, bg=CARD)
@@ -195,6 +206,7 @@ class App(tk.Tk):
         btn_row2 = styled_frame(c2, bg=CARD)
         btn_row2.pack(fill="x", padx=14, pady=(4, 6))
         accent_button(btn_row2, "Dosya Seç…", self._pick_files).pack(side="left", padx=(0, 8))
+        accent_button(btn_row2, "Klasör Seç…", self._pick_folder, color="#7c6fcd").pack(side="left", padx=(0, 8))
         accent_button(btn_row2, "Temizle",    self._clear_files, color="#555").pack(side="left", padx=(0, 8))
         accent_button(btn_row2, "Örnek Bölge Seç", self._select_sample, color="#5c6bc0").pack(side="left")
 
@@ -219,6 +231,8 @@ class App(tk.Tk):
         self.btn_run = accent_button(run_row, "Seçili Dosyaları İşle",
                                      self._run_processing, color=ACCENT2)
         self.btn_run.pack(side="left")
+        self.lbl_timer = label(run_row, "Geçen Süre: 0.00s", font=FONT_BODY, fg=TEXT_DIM, bg=CARD)
+        self.lbl_timer.pack(side="right", padx=10)
 
         # İlerleme çubuğu
         self.progress_var = tk.DoubleVar(value=0)
@@ -338,6 +352,7 @@ class App(tk.Tk):
                 max_val=self.var_max.get(),
                 total_expected_images=self.var_total.get(),
                 preview_count=self.var_prev.get(),
+                reporting_level=self.var_level.get(),
             )
             self.session_active = True
             self.preview_ids.clear()
@@ -372,6 +387,13 @@ class App(tk.Tk):
                 self.selected_files.append(f)
                 self.file_listbox.insert("end", os.path.basename(f))
 
+    def _pick_folder(self):
+        folder = filedialog.askdirectory(title="Görüntü klasörünü seçin")
+        if folder:
+            if folder not in self.selected_files:
+                self.selected_files.append(folder)
+                self.file_listbox.insert("end", f"[Klasör] {os.path.basename(folder)}")
+
     def _clear_files(self):
         self.selected_files.clear()
         self.file_listbox.delete(0, "end")
@@ -391,6 +413,17 @@ class App(tk.Tk):
             return
 
         path = self.selected_files[0]
+        if os.path.isdir(path):
+            import glob
+            extensions = ['*.tif', '*.tiff', '*.png', '*.jpg', '*.jpeg', '*.bmp']
+            found = []
+            for ext in extensions:
+                found.extend(glob.glob(os.path.join(path, ext)))
+                found.extend(glob.glob(os.path.join(path, ext.upper())))
+            if not found:
+                self._log(f"[Hata]: Seçilen klasörde örnek görüntülenecek resim bulunamadı → {path}", "error")
+                return
+            path = sorted(found)[0]
 
         # ── 1. Ham görüntüyü oku (16-bit korunur) ──────────────────────
         img_orig = cv2.imread(path, cv2.IMREAD_UNCHANGED)
@@ -523,6 +556,22 @@ class App(tk.Tk):
             messagebox.showwarning("Uyarı", "İşlenecek dosya seçmediniz.")
             return
 
+        # Klasör veya dosyaları çözümle
+        import glob
+        resolved = []
+        for p in self.selected_files:
+            if os.path.isdir(p):
+                extensions = ['*.tif', '*.tiff', '*.png', '*.jpg', '*.jpeg', '*.bmp']
+                for ext in extensions:
+                    resolved.extend(glob.glob(os.path.join(p, ext)))
+                    resolved.extend(glob.glob(os.path.join(p, ext.upper())))
+            else:
+                resolved.append(p)
+        actual_total = len(set(resolved))
+        if actual_total == 0:
+            messagebox.showwarning("Uyarı", "Seçilen konumlarda işlenebilecek geçerli görüntü (*.tif, *.png vb.) bulunamadı.")
+            return
+
         # If total_expected_images was left at 0 (unknown), the algorithm uses
         # preview_count as step_size, which means it saves a preview every
         # preview_count-th image – NOT preview_count total previews.
@@ -533,13 +582,13 @@ class App(tk.Tk):
                 self.processor.cleanup_session(self.session_id)
             except Exception:
                 pass
-            actual_total = len(self.selected_files)
             self.processor.start_session(
                 self.session_id,
                 min_val=self.var_min.get(),
                 max_val=self.var_max.get(),
                 total_expected_images=actual_total,
                 preview_count=self.var_prev.get(),
+                reporting_level=self.var_level.get(),
             )
             self.preview_ids.clear()
             self._preview_images.clear()
@@ -550,45 +599,81 @@ class App(tk.Tk):
                        "warn")
 
         self.btn_run.config(state="disabled", text="⏳ İşleniyor…")
+        self.start_time = time.time()
+        self.processing_active = True
+        self._update_timer()
         threading.Thread(target=self._worker, daemon=True).start()
 
     def _worker(self):
-        total = len(self.selected_files)
-        for i, path in enumerate(self.selected_files):
-            self._log(f"\n── [{i+1}/{total}] {os.path.basename(path)}", "info")
-            try:
-                def cb(payload, idx=i+1):
-                    status = payload.get("status", "")
-                    msg    = payload.get("message", "")
-                    step   = payload.get("step")
-                    if status == "progress":
-                        tag = "progress"
-                        line = f"  [{step}/4] {msg}"
-                    elif status == "completed":
-                        tag = "completed"
-                        line = (f"  ✔ Tamamlandı – "
-                                f"piksel={payload.get('image_pixels_in_range',0)}, "
-                                f"genel={payload.get('global_total_pixels',0)}, "
-                                f"önizleme={payload.get('saved_preview_id')}")
-                        pid = payload.get("saved_preview_id")
-                        if pid and pid not in self.preview_ids:
-                            self.preview_ids.append(pid)
-                    else:
-                        tag = "warn"
-                        line = f"  {msg}"
+        import glob
+        resolved = []
+        for p in self.selected_files:
+            if os.path.isdir(p):
+                extensions = ['*.tif', '*.tiff', '*.png', '*.jpg', '*.jpeg', '*.bmp']
+                for ext in extensions:
+                    resolved.extend(glob.glob(os.path.join(p, ext)))
+                    resolved.extend(glob.glob(os.path.join(p, ext.upper())))
+            else:
+                resolved.append(p)
+        total = len(set(resolved))
+        if total == 0:
+            total = 1
+
+        completed_count = 0
+        self._log(f"\n🚀 Eşzamanlı (paralel) işleme başlatıldı. Toplam dosya: {total}", "info")
+        
+        try:
+            def cb(payload):
+                nonlocal completed_count
+                status = payload.get("status", "")
+                msg    = payload.get("message", "")
+                step   = payload.get("step")
+                
+                if status == "progress":
+                    tag = "progress"
+                    line = f"  [{step}/4] {msg}"
+                    self.after(0, self._log, line, tag)
+                elif status == "completed":
+                    completed_count += 1
+                    pct = (completed_count / total) * 100
+                    self.after(0, self.progress_var.set, pct)
+                    
+                    tag = "completed"
+                    line = (f"  ✔ Tamamlandı – "
+                            f"piksel={payload.get('image_pixels_in_range',0)}, "
+                            f"genel={payload.get('global_total_pixels',0)}, "
+                            f"önizleme={payload.get('saved_preview_id')}")
+                    pid = payload.get("saved_preview_id")
+                    if pid and pid not in self.preview_ids:
+                        self.preview_ids.append(pid)
+                    self.after(0, self._log, line, tag)
+                elif status == "error":
+                    completed_count += 1
+                    pct = (completed_count / total) * 100
+                    self.after(0, self.progress_var.set, pct)
+                    
+                    tag = "error"
+                    line = f"  ✘ Hata ({os.path.basename(payload.get('image_path', ''))}): {msg}"
                     self.after(0, self._log, line, tag)
 
-                result = self.processor.process_image(self.session_id, path, cb)
-                pct = ((i + 1) / total) * 100
-                self.after(0, self.progress_var.set, pct)
-            except Exception as ex:
-                self.after(0, self._log, f"  ✘ Hata: {ex}", "error")
+            self.processor.process_images(self.session_id, self.selected_files, cb)
+        except Exception as ex:
+            self.after(0, self._log, f"  ✘ Hata: {ex}", "error")
 
         self.after(0, self._on_processing_done)
 
     def _on_processing_done(self):
+        self.processing_active = False
+        final_elapsed = time.time() - self.start_time
+        self.lbl_timer.config(text=f"Geçen Süre: {final_elapsed:.2f}s")
         self.btn_run.config(state="normal", text="🚀  Seçili Dosyaları İşle")
-        self._log("\n✔ Tüm dosyalar işlendi.", "completed")
+        self._log(f"\n✔ Tüm dosyalar işlendi. Toplam Süre: {final_elapsed:.2f}s", "completed")
+
+    def _update_timer(self):
+        if hasattr(self, "processing_active") and self.processing_active:
+            elapsed = time.time() - self.start_time
+            self.lbl_timer.config(text=f"Geçen Süre: {elapsed:.2f}s")
+            self.after(50, self._update_timer)
 
     # ── Özet ──────────────────────────────────────────────────────────────
 
