@@ -1,0 +1,52 @@
+﻿<Window x:Class="Wpf.Views.LoadingWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Environment Setup" 
+        Height="220" Width="450"
+        WindowStyle="None"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterScreen"
+        Background="{StaticResource LoadingWindowBackgroundBrush}">
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisConverter"/>
+        </Window.Resources>
+            <Border BorderBrush="{StaticResource LoadingBorderBrush}" BorderThickness="1" CornerRadius="8">
+        <Grid Margin="25">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <!-- Header -->
+            <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,15">
+                <TextBlock Text="Initializing Environment" 
+                           Foreground="White" 
+                           FontSize="16" 
+                           FontWeight="Bold"/>
+            </StackPanel>
+
+            <!-- Status & Loading -->
+            <StackPanel Grid.Row="1" VerticalAlignment="Center">
+                <TextBlock Text="{Binding StatusMessage}" 
+                           Foreground="{StaticResource LoadingMutedTextBrush}" 
+                           FontSize="13" 
+                           TextWrapping="Wrap" 
+                           Margin="0,0,0,12"/>
+
+                <ProgressBar Style="{StaticResource LoadingProgressBarStyle}" 
+                             IsIndeterminate="{Binding IsIndeterminate}" 
+                             Value="{Binding ProgressValue}" 
+                             Maximum="100"/>
+            </StackPanel>
+
+            <!-- Error Notification if Failure Occurs -->
+            <TextBlock Grid.Row="2" 
+                       Text="{Binding ErrorMessage}" 
+                       Foreground="#F43F5E" 
+                       FontSize="11" 
+                       TextWrapping="Wrap"
+                       Visibility="{Binding HasError, Converter={StaticResource BoolToVisConverter}}"/>
+        </Grid>
+    </Border>
+</Window>

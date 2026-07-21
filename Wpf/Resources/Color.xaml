@@ -24,4 +24,17 @@
     <SolidColorBrush x:Key="TerminalTextBrush" Color="#80FF80"/>
     <SolidColorBrush x:Key="StatusPanelBackgroundBrush" Color="#2D2D30"/>
 
+    <!-- Color Palette -->
+    <Color x:Key="WindowBgColor">#0F172A</Color>
+    <Color x:Key="CardBgColor">#1E293B</Color>
+    <Color x:Key="BorderColor">#334155</Color>
+    <Color x:Key="AccentColor">#38BDF8</Color>
+    <Color x:Key="MutedTextColor">#94A3B8</Color>
+
+    <SolidColorBrush x:Key="LoadingWindowBackgroundBrush" Color="{StaticResource WindowBgColor}"/>
+    <SolidColorBrush x:Key="LoadingCardBackgroundBrush" Color="{StaticResource CardBgColor}"/>
+    <SolidColorBrush x:Key="LoadingBorderBrush" Color="{StaticResource BorderColor}"/>
+    <SolidColorBrush x:Key="LoadingAccentBrush" Color="{StaticResource AccentColor}"/>
+    <SolidColorBrush x:Key="LoadingMutedTextBrush" Color="{StaticResource MutedTextColor}"/>
+
 </ResourceDictionary>

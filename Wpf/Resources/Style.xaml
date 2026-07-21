@@ -149,4 +149,12 @@
         </Setter>
     </Style>
 
+    <!-- Loading Window Progress Bar Style -->
+    <Style x:Key="LoadingProgressBarStyle" TargetType="ProgressBar">
+        <Setter Property="Height" Value="6"/>
+        <Setter Property="Background" Value="#0F172A"/>
+        <Setter Property="Foreground" Value="{StaticResource LoadingAccentBrush}"/>
+        <Setter Property="BorderThickness" Value="0"/>
+    </Style>
+
 </ResourceDictionary>
