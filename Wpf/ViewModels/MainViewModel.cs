@@ -151,6 +151,16 @@ namespace Wpf.ViewModels
         [ObservableProperty] private bool _isTerminalVisible = true;
         [ObservableProperty] private bool _isProgressBarVisible = true;
 
+        [ObservableProperty]
+        private int _selectedDevice = 2;
+
+        public bool? SelectedUseGpu => SelectedDevice switch
+        {
+            0 => false, // CPU
+            1 => true,  // GPU
+            _ => null   // Auto
+        };
+
         partial void OnIsTerminalVisibleChanged(bool value)
         {
             if (!value)
@@ -798,7 +808,8 @@ namespace Wpf.ViewModels
                 MinValue = minVal,
                 MaxValue = maxVal,
                 total_expected_images = SelectedImagesQueue.Count,
-                preview_count = PreviewCount
+                preview_count = PreviewCount,
+                UseGpu = SelectedUseGpu
             };
 
             var result = await _processingService.SendDataAsync(scanRequest);

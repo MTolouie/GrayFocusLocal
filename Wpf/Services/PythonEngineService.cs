@@ -13,6 +13,19 @@ namespace Wpf.Services
         public bool IsInitialized => _isInitialized;
         public dynamic Processor { get; private set; } = null!;
 
+        /// <summary>
+        /// Re-initializes the GrayscaleProcessor with the requested hardware accelerator preference.
+        /// Must be called from threads where GIL management is handled.
+        /// </summary>
+        public void ReinitializeProcessor(bool? useGpu)
+        {
+            using (Py.GIL())
+            {
+                dynamic clr = Py.Import("grayscale_clr");
+                Processor = clr.GrayscaleProcessor(use_gpu: useGpu);
+            }
+        }
+
         public void StartBackend()
         {
             if (_isInitialized) return;

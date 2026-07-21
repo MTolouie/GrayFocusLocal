@@ -12,4 +12,5 @@ public class ScanRequestDTO
     public int MaxValue { get; set; }
     public int total_expected_images { get; set; }
     public int preview_count { get; set; }
+    public bool? UseGpu { get; set; }
 }

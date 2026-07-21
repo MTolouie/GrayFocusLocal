@@ -43,8 +43,9 @@ namespace Wpf.Services
                 {
                     using (Py.GIL())
                     {
-                        // start_session() returns None on success and raises
-                        // KeyError if the session_id is already active
+                        // Cleanly re-initialize the processor inside PythonEngineService
+                        _engine.ReinitializeProcessor(request.UseGpu);
+
                         _engine.Processor.start_session(
                             request.SessionId ?? string.Empty,
                             request.MinValue,

@@ -244,10 +244,15 @@
                         
                     </Border>
                     <Border Style="{StaticResource CardPanelStyle}" Margin="0,0,0,15">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
                         <StackPanel>
                             <TextBlock Text="UI Display Toggles" Style="{StaticResource SubHeaderTextStyle}" Margin="0,0,0,10"/>
 
-                            <StackPanel Orientation="Vertical">
+                            <StackPanel  Orientation="Vertical">
                                 <!-- Show Terminal Control (Checked by default) -->
                                 <!-- Show Terminal Control -->
                                 <CheckBox Content="Show Terminal Log" 
@@ -264,7 +269,22 @@
           Visibility="{Binding IsTerminalVisible, Converter={StaticResource BoolToVisConverter}}"/>
 
                             </StackPanel>
-                        </StackPanel>
+                                                  
+                            </StackPanel>
+                            <StackPanel Grid.Column="1"   Margin="0,0,0,15">
+                                <TextBlock Text="Processing Device" 
+ Foreground="{StaticResource MutedTextBrush}" 
+ Style="{StaticResource SubHeaderTextStyle}" 
+ Margin="0,0,0,5"/>
+                                <ComboBox SelectedIndex="{Binding SelectedDevice}" 
+Height="30" 
+VerticalContentAlignment="Center">
+                                    <ComboBoxItem Content="CPU"/>
+                                    <ComboBoxItem Content="GPU (CUDA Required)"/>
+                                    <ComboBoxItem Content="Automatic (Auto-Detect)"/>
+                                </ComboBox>
+                            </StackPanel>
+                        </Grid>
                     </Border>
                     <Border Style="{StaticResource CardPanelStyle}" Margin="0,0,0,15">
                        
@@ -362,6 +382,7 @@
                                        Foreground="#34D399" Style="{StaticResource BodyTextStyle}"
                                        Margin="4,4,0,0" FontWeight="SemiBold"/>
                         </StackPanel>
+                        
                     </Border>
 
                 </StackPanel>
