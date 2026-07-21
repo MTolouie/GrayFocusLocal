@@ -68,6 +68,20 @@ import threading
 
 
 # ---------------------------------------------------------------------------
+# GPU yardımcısı
+# ---------------------------------------------------------------------------
+
+def _is_gpu_available() -> bool:
+    """CuPy kuruluysa ve çalışan bir CUDA aygıtı varsa True döndürür."""
+    try:
+        import cupy as cp  # type: ignore
+        cp.cuda.runtime.getDeviceCount()   # en az 1 CUDA aygıtı gerekli
+        return cp.cuda.runtime.getDeviceCount() > 0
+    except Exception:
+        return False
+
+
+# ---------------------------------------------------------------------------
 # Modül düzeyinde oturum deposu (Python motoru yaşadığı sürece kalıcıdır)
 # ---------------------------------------------------------------------------
 _sessions: dict = {}
@@ -110,7 +124,34 @@ class GrayscaleProcessor:
         image_pixels_in_range   : int
         global_total_pixels     : int
         saved_preview_id        : str | None
+
+    Parametreler
+    ------------
+    use_gpu : bool | None
+        True   → GPU (CuPy) zorla kullan; CuPy yoksa RuntimeError fırlatır.
+        False  → CPU (NumPy/OpenCV) kullan.
+        None   → Otomatik algıla: GPU varsa GPU, yoksa CPU kullan.
     """
+
+    def __init__(self, use_gpu=None):
+        if use_gpu is None:
+            self.use_gpu: bool = _is_gpu_available()
+        else:
+            self.use_gpu = bool(use_gpu)
+
+        if self.use_gpu:
+            try:
+                import cupy as cp  # type: ignore  # noqa: F401
+            except ImportError as exc:
+                raise RuntimeError(
+                    "use_gpu=True ancak CuPy kurulu değil. "
+                    "Kurulum: pip install cupy-cuda12x  (veya uygun CUDA sürümü)"
+                ) from exc
+
+    @property
+    def device_label(self) -> str:
+        """'GPU' veya 'CPU' döndürür – UI etiketleri için kullanışlı."""
+        return "GPU" if self.use_gpu else "CPU"
 
     # ------------------------------------------------------------------
     # Oturum yaşam döngüsü
@@ -287,15 +328,23 @@ class GrayscaleProcessor:
         })
 
         # ── Adım 3: Piksel hesaplama (16-bit tam hassasiyetle) ─────────
+        device = "GPU" if self.use_gpu else "CPU"
         _output({
             "status": "progress",
             "step": 3,
             "total_steps": 4,
-            "message": "Belirtilen aralıktaki pikseller hesaplanıyor...",
+            "message": f"Belirtilen aralıktaki pikseller hesaplanıyor [{device}]...",
         })
 
-        mask            = cv2.inRange(img, min_val, max_val)
-        pixels_in_range = int(np.count_nonzero(mask))
+        if self.use_gpu:
+            import cupy as cp  # type: ignore
+            gpu_img         = cp.asarray(img)
+            gpu_mask        = (gpu_img >= min_val) & (gpu_img <= max_val)
+            pixels_in_range = int(cp.count_nonzero(gpu_mask))
+            mask            = cp.asnumpy(gpu_mask.astype(cp.uint8) * 255)
+        else:
+            mask            = cv2.inRange(img, min_val, max_val)
+            pixels_in_range = int(np.count_nonzero(mask))
 
         with session["lock"]:
             session["global_total_pixels"] += pixels_in_range

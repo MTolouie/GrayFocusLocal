@@ -20,7 +20,7 @@ import cv2
 
 # grayscale_clr'ı aynı dizinden yükle
 sys.path.insert(0, os.path.dirname(__file__))
-from grayscale_clr import GrayscaleProcessor
+from grayscale_clr import GrayscaleProcessor, _is_gpu_available
 
 # ─── Renk paleti ────────────────────────────────────────────────────────────
 BG        = "#0f1117"
@@ -113,9 +113,12 @@ class App(tk.Tk):
         self.minsize(900, 640)
         self.configure(bg=BG)
 
-        self.processor  = GrayscaleProcessor()
+        self.processor  = GrayscaleProcessor()   # default: auto-detect
         self.session_id = "test_session"
         self.session_active = False
+
+        # GPU durumunu bir kez sorgula (UI ipucu için)
+        self._gpu_available = _is_gpu_available()
 
         # ─ Seçilen dosyalar
         self.selected_files: list[str] = []
@@ -134,6 +137,9 @@ class App(tk.Tk):
               font=FONT_TITLE, fg=ACCENT, bg=SURFACE).pack(side="left", padx=20, pady=10)
         label(header, "grayscale_clr.py",
               font=FONT_SMALL, fg=TEXT_DIM, bg=SURFACE).pack(side="right", padx=20)
+        self.lbl_device_badge = label(header, "CPU",
+              font=FONT_SMALL, fg=ACCENT2, bg=SURFACE)
+        self.lbl_device_badge.pack(side="right", padx=(0, 8))
 
         # İki sütunlu ana gövde
         body = styled_frame(self, bg=BG)
@@ -165,6 +171,8 @@ class App(tk.Tk):
         self.var_total   = tk.IntVar(value=0)
         self.var_prev    = tk.IntVar(value=5)
         self.var_level   = tk.StringVar(value="steps")
+        # 0 = CPU, 1 = GPU, 2 = Otomatik
+        self.var_device  = tk.IntVar(value=2)
 
         rows = [
             ("Session ID",       self.var_session, "entry"),
@@ -189,6 +197,24 @@ class App(tk.Tk):
                 )
                 w["menu"].config(bg="#2b2f45", fg=TEXT, font=FONT_BODY, activebackground=ACCENT)
             w.grid(row=i, column=1, sticky="e", pady=3, padx=4)
+
+        # ── İşlem cihazı seçimi (CPU / GPU / Otomatik) ──────────────────
+        dev_row = styled_frame(grid, bg=CARD)
+        n_rows = len(rows)
+        label(grid, "İşlem Cihazı", fg=TEXT_DIM, bg=CARD).grid(
+            row=n_rows, column=0, sticky="w", pady=3, padx=4)
+        dev_row.grid(row=n_rows, column=1, sticky="e", pady=3, padx=4)
+
+        gpu_hint = "" if self._gpu_available else "  (GPU yok)"
+        for val, txt in [(0, "CPU"), (1, f"GPU{gpu_hint}"), (2, "Otomatik")]:
+            rb = tk.Radiobutton(
+                dev_row, text=txt, variable=self.var_device, value=val,
+                font=FONT_SMALL, fg=TEXT, bg=CARD,
+                selectcolor="#2b2f45", activebackground=CARD,
+                activeforeground=ACCENT, cursor="hand2",
+                state="normal" if (val != 1 or self._gpu_available) else "disabled",
+            )
+            rb.pack(side="left", padx=(0, 6))
 
         btn_row = styled_frame(c, bg=CARD)
         btn_row.pack(fill="x", padx=14, pady=(0, 14))
@@ -345,6 +371,15 @@ class App(tk.Tk):
 
     def _start_session(self):
         self.session_id = self.var_session.get().strip() or "test_session"
+        # Seçilen cihaza göre yeni bir GrayscaleProcessor oluştur
+        dv = self.var_device.get()
+        use_gpu = None if dv == 2 else bool(dv)  # 0→False, 1→True, 2→None
+        try:
+            self.processor = GrayscaleProcessor(use_gpu=use_gpu)
+        except RuntimeError as ex:
+            self._log(f"✘ Cihaz başlatılamadı: {ex}", "error")
+            return
+        self.lbl_device_badge.config(text=self.processor.device_label)
         try:
             self.processor.start_session(
                 self.session_id,
@@ -359,7 +394,8 @@ class App(tk.Tk):
             self._preview_images.clear()
             self._update_session_state()
             self._log(f"✔ Oturum başlatıldı: '{self.session_id}'  "
-                      f"min={self.var_min.get()} max={self.var_max.get()}", "completed")
+                      f"min={self.var_min.get()} max={self.var_max.get()}  "
+                      f"[{self.processor.device_label}]", "completed")
         except Exception as ex:
             self._log(f"✘ Oturum başlatılamadı: {ex}", "error")
 
@@ -582,6 +618,13 @@ class App(tk.Tk):
                 self.processor.cleanup_session(self.session_id)
             except Exception:
                 pass
+            # Aynı cihaz ayarını koru
+            dv = self.var_device.get()
+            use_gpu = None if dv == 2 else bool(dv)
+            try:
+                self.processor = GrayscaleProcessor(use_gpu=use_gpu)
+            except RuntimeError:
+                pass   # hata zaten _start_session'da gösterildi
             self.processor.start_session(
                 self.session_id,
                 min_val=self.var_min.get(),
