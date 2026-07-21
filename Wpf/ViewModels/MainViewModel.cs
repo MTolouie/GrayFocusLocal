@@ -145,6 +145,20 @@ namespace Wpf.ViewModels
         // How many preview images the user wants the API to send back
         [ObservableProperty] private int _previewCount = 10;
 
+        // ADD THIS LINE FOR THE PROGRESS BAR
+        [ObservableProperty] private double _progressValue;
+
+        [ObservableProperty] private bool _isTerminalVisible = true;
+        [ObservableProperty] private bool _isProgressBarVisible = true;
+
+        partial void OnIsTerminalVisibleChanged(bool value)
+        {
+            if (!value)
+            {
+                IsProgressBarVisible = false;
+            }
+        }
+
 
         private bool _isProcessing;
 
@@ -770,6 +784,9 @@ namespace Wpf.ViewModels
             TotalPixelsInRange = 0;
             CalculatedVolumeMessage = "Total Volume: N/A";
 
+            // 1. INITIALIZE PROGRESS BAR
+            ProgressValue = 0;
+
             _cts = new CancellationTokenSource();
             var cts = _cts; // Local copy for safety inside callbacks
             IsProcessing = true;
@@ -810,23 +827,42 @@ namespace Wpf.ViewModels
                         throw new OperationCanceledException(cts.Token);
                     }
 
+                    // Skip all UI thread marshaling completely if both features are turned off!
+                    if ((progress.Status == "progress" || progress.Status == "error") && !IsTerminalVisible)
+                    {
+                        return;
+                    }
+
                     Task.Factory.StartNew(() =>
                     {
                         if (progress.Status == "progress")
                         {
-                            CurrentStatusMessage = progress.Message;
-                            ExecutionLog.Add($"[Step {progress.Step}/{progress.TotalSteps}] {progress.Message}");
+                            // Only touch the status text / log when the terminal is visible —
+                            // avoids a PropertyChanged + binding update on every progress tick.
+                            if (IsTerminalVisible)
+                            {
+                                CurrentStatusMessage = progress.Message;
+                                ExecutionLog.Add($"[Step {progress.Step}/{progress.TotalSteps}] {progress.Message}");
+                            }
                         }
                         else if (progress.Status == "completed")
                         {
                             processedItemsCount++;
                             int remaining = totalImages - processedItemsCount;
+                            // PERFORMANCE CAP: Only calculate progress percentage if the progress bar is active
+                            if (IsProgressBarVisible && totalImages > 0)
+                            {
+                                ProgressValue = ((double)processedItemsCount / totalImages) * 100;
+                            }
 
                             // Update metrics
                             TotalPixelsInRange += progress.ImagePixelsInRange;
                             RecalculateTotalVolume();
 
-                            ExecutionLog.Add($"✨ [Processed Slice] Target Found: {progress.ImagePixelsInRange} px");
+                            if (IsTerminalVisible)
+                            {
+                                ExecutionLog.Add($"✨ [Processed Slice] Target Found: {progress.ImagePixelsInRange} px");
+                            }
 
                             // Try to advance the UI view to display the image that just finished
                             // or remove it gracefully from the visual collection queue.
@@ -846,13 +882,21 @@ namespace Wpf.ViewModels
                             // Update titles dynamically to reflect true batch progression status
                             if (SelectedImagesQueue.Count > 0)
                             {
-                                ImagePath = SelectedImagesQueue[0]; // Set next image on screen
+                                ImagePath = SelectedImagesQueue[0]; // Still advance the preview image
+
+                                // Only rebuild the title string when the terminal is visible — skips
+                                // a string interpolation + PropertyChanged on every processed slice.
+
                                 ImageDisplayTitle = $"Original Photo ({Path.GetFileName(ImagePath)}) - {remaining} remaining";
+
                             }
                         }
                         else if (progress.Status == "error")
                         {
-                            ExecutionLog.Add($"❌ Error processing slice: {progress.Message}");
+                            if (IsTerminalVisible)
+                            {
+                                ExecutionLog.Add($"❌ Error processing slice: {progress.Message}");
+                            }
                         }
                     }, CancellationToken.None, TaskCreationOptions.None, uiScheduler);
                 };
@@ -868,7 +912,13 @@ namespace Wpf.ViewModels
                 ImagePath = string.Empty;
                 ImageDisplayTitle = "Original Photo (All images processed)";
                 CurrentStatusMessage = "All images processed successfully!";
-                ExecutionLog.Add("--- PARALLEL BATCH RUN COMPLETE ---");
+                if (IsTerminalVisible)
+                {
+                    ExecutionLog.Add("--- PARALLEL BATCH RUN COMPLETE ---");
+                }
+
+                // Ensure progress finishes completely filled out
+                ProgressValue = 100;
 
                 TotalPixelsInRange = sessionSummary.GlobalTotalPixels;
                 RecalculateTotalVolume();
@@ -900,9 +950,13 @@ namespace Wpf.ViewModels
             }
             catch (Exception ex)
             {
-                ExecutionLog.Add($"❌ Bulk Pipeline Fault: {ex.Message}");
+                if (IsTerminalVisible)
+                {
+                    ExecutionLog.Add($"❌ Bulk Pipeline Fault: {ex.Message}");
+                }
                 CurrentStatusMessage = "Processing error occurred.";
                 IsProcessing = false;
+                ProgressValue = 0; // Reset bar on crash
             }
         }
 
@@ -950,6 +1004,8 @@ namespace Wpf.ViewModels
             _processedResultsPaths.Clear();
             TotalPixelsInRange = 0;
             CalculatedVolumeMessage = "Total Volume: N/A";
+
+            ProgressValue = 0;
 
             ImagePath = null;
             ImageDisplayTitle = "Original Photo (No images left in queue)";

@@ -13,6 +13,8 @@
         WindowStartupLocation="CenterScreen">
     <Window.Resources>
         <helpers:DecimalTextBoxConverter x:Key="DecimalConverter"/>
+        <BooleanToVisibilityConverter x:Key="BoolToVisConverter"/>
+        <helpers:PathToDecodedBitmapConverter x:Key="PathToBitmapConverter" DecodePixelWidth="1600"/>
     </Window.Resources>
     <Grid>
         <Grid.ColumnDefinitions>
@@ -55,9 +57,9 @@
                         <Grid HorizontalAlignment="Left" VerticalAlignment="Top">
 
                             <Image x:Name="TargetImage"
-                                   RenderOptions.BitmapScalingMode="NearestNeighbor"
-                                   Source="{Binding ImagePath}" 
-                                   Stretch="None">
+       RenderOptions.BitmapScalingMode="NearestNeighbor"
+       Source="{Binding ImagePath, Converter={StaticResource PathToBitmapConverter}}" 
+       Stretch="None">
                                 <i:Interaction.Triggers>
                                     <i:EventTrigger EventName="SizeChanged">
                                         <i:InvokeCommandAction Command="{Binding UpdateRenderedBoundsCommand}" PassEventArgsToCommand="True"/>
@@ -125,25 +127,44 @@
                 </ScrollViewer>
             </Grid>
         </Border>
+        <!-- 1. The Terminal entire block now responds to the 'Show Terminal' CheckBox -->
         <Border Grid.Row="2" Grid.Column="0" Margin="5" 
-                Background="{StaticResource EditorBackgroundBrush}" 
-                BorderBrush="{StaticResource BorderBrush}" 
-                BorderThickness="1" 
-                CornerRadius="6">
-            <Grid Grid.Row="1" Grid.Column="0">
+        Background="{StaticResource EditorBackgroundBrush}" 
+        BorderBrush="{StaticResource BorderBrush}" 
+        BorderThickness="1" 
+        CornerRadius="6"
+        Visibility="{Binding IsTerminalVisible, Converter={StaticResource BoolToVisConverter}}">
+
+            <Grid Margin="10,5,10,5">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <!-- Row for the ProgressBar line -->
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
-                <TextBlock Text="Python API Execution Log" Style="{StaticResource SubHeaderTextStyle}" Margin="0,5,0,5"/>
 
-                <ListBox Grid.Row="1" 
-         ItemsSource="{Binding ExecutionLog}" 
-         Style="{StaticResource TerminalListBoxStyle}"
-         VirtualizingStackPanel.IsVirtualizing="True"
-         VirtualizingStackPanel.VirtualizationMode="Recycling"
-         ScrollViewer.CanContentScroll="True"
-         helpers:ListBoxBehavior.AutoScrollToBottom="True"/>
+                <TextBlock Grid.Row="0" Text="Python API Execution Log" Style="{StaticResource SubHeaderTextStyle}" Margin="0,0,0,5"/>
+
+                <!-- 2. The Progress Bar Line: Positioned right above the terminal log -->
+                <!-- Styled to be a medium line (Height=5), balanced and modern -->
+                <ProgressBar Grid.Row="1" 
+                     Height="5" 
+                     Margin="0,2,0,6"
+                     Minimum="0" 
+                     Maximum="100" 
+                     Value="{Binding ProgressValue}"
+                     Foreground="#38BDF8" 
+                     Background="#1E293B" 
+                     BorderThickness="0"
+                     Visibility="{Binding IsProgressBarVisible, Converter={StaticResource BoolToVisConverter}}"/>
+
+                <ListBox Grid.Row="2" 
+                 ItemsSource="{Binding ExecutionLog}" 
+                 Style="{StaticResource TerminalListBoxStyle}"
+                 VirtualizingStackPanel.IsVirtualizing="True"
+                 VirtualizingStackPanel.VirtualizationMode="Recycling"
+                 ScrollViewer.CanContentScroll="True"
+                 helpers:ListBoxBehavior.AutoScrollToBottom="True"/>
             </Grid>
         </Border>
 
@@ -220,10 +241,34 @@
                                 </Button>
                             </Border>
                         </StackPanel>
+                        
                     </Border>
-
                     <Border Style="{StaticResource CardPanelStyle}" Margin="0,0,0,15">
                         <StackPanel>
+                            <TextBlock Text="UI Display Toggles" Style="{StaticResource SubHeaderTextStyle}" Margin="0,0,0,10"/>
+
+                            <StackPanel Orientation="Vertical">
+                                <!-- Show Terminal Control (Checked by default) -->
+                                <!-- Show Terminal Control -->
+                                <CheckBox Content="Show Terminal Log" 
+          IsChecked="{Binding IsTerminalVisible, Mode=TwoWay}" 
+          Foreground="White" 
+          Margin="0,0,0,10"
+          Cursor="Hand"/>
+
+                                <!-- Show Progress Bar Control (Only visible if Terminal is visible) -->
+                                <CheckBox Content="Show Progress Bar" 
+          IsChecked="{Binding IsProgressBarVisible, Mode=TwoWay}" 
+          Foreground="White" 
+          Cursor="Hand"
+          Visibility="{Binding IsTerminalVisible, Converter={StaticResource BoolToVisConverter}}"/>
+
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+                    <Border Style="{StaticResource CardPanelStyle}" Margin="0,0,0,15">
+                       
+                        <StackPanel Grid.Column="0">
                             <TextBlock Text="Selected Region Intensities" Style="{StaticResource SubHeaderTextStyle}" Margin="0,0,0,10"/>
 
                             <StackPanel Margin="0,0,0,10">
@@ -235,16 +280,21 @@
                      Background="#1E293B" Foreground="White" BorderBrush="{StaticResource BorderBrush}"
                      Padding="5" Height="30" VerticalContentAlignment="Center"/>
                             </StackPanel>
-
-                            <Button Content="Scan Target Region"
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Button Grid.Column="0" Content="Scan Target Region"
                 Command="{Binding SendImageCommand}"
                 Style="{StaticResource AccentButtonStyle}"
-                Margin="0,0,0,15" Height="40"/>
-                            <Button Content="Abort / Cancel Operation"
+                Margin="0,0,5,15" Height="40"/>
+                            <Button Grid.Column="1" Content="Abort / Cancel Operation"
         Command="{Binding AbortProcessingCommand}"
         Style="{StaticResource AbortButtonStyle}"
         Height="40" 
-        Margin="0,0,0,15"/>
+        Margin="5,0,0,15"/>
+                            </Grid>
 
                             <Grid>
                                 <Grid.ColumnDefinitions>
@@ -316,6 +366,7 @@
 
                 </StackPanel>
             </StackPanel>
+            
 
             <Border Grid.Row="1" Style="{StaticResource StatusPanelStyle}" Margin="0,15,0,0">
                 <Grid>
@@ -327,6 +378,8 @@
                     <TextBlock Grid.Column="1" Text="{Binding CurrentStatusMessage}" TextTrimming="CharacterEllipsis" Style="{StaticResource BodyTextStyle}"/>
                 </Grid>
             </Border>
+            
         </Grid>
+        
     </Grid>
 </Window>
