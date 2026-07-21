@@ -61,6 +61,10 @@ Tasarım kuralları (Python.NET en iyi uygulamaları):
 
 # pyrefly: ignore [missing-import]
 import os
+import sys as _sys
+_sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import bootstrap  # noqa: F401 — bağımlılıkları otomatik kur (venv gerekmez)
+
 # pyrefly: ignore [missing-import]
 import cv2
 import numpy as np
