@@ -118,8 +118,8 @@ namespace Wpf.ViewModels
         [ObservableProperty] private double _renderedImageHeight;
 
         // --- SELECTION INTENSITY METRICS ---
-        [ObservableProperty] private string _selectedMinIntensity = "N/A";
-        [ObservableProperty] private string _selectedMaxIntensity = "N/A";
+        [ObservableProperty] private int _selectedMinIntensity;
+        [ObservableProperty] private int _selectedMaxIntensity;
 
         public ObservableCollection<string> ExecutionLog { get; } = new();
 
@@ -320,8 +320,8 @@ namespace Wpf.ViewModels
 
         private void LoadNextImageFromQueue()
         {
-            SelectedMinIntensity = "N/A";
-            SelectedMaxIntensity = "N/A";
+            SelectedMinIntensity = 0;
+            SelectedMaxIntensity = 0;
             _currentRoiResult = null;
 
             if (SelectedImagesQueue.Count > 0)
@@ -418,8 +418,8 @@ namespace Wpf.ViewModels
             _isFreehandDrawing = false;
             FreehandFillBrush = Brushes.Transparent;
 
-            SelectedMinIntensity = "N/A";
-            SelectedMaxIntensity = "N/A";
+            SelectedMinIntensity = 0;
+            SelectedMaxIntensity = 0;
             _currentRoiResult = null;
 
             CurrentStatusMessage = $"Selection cleared for {Path.GetFileName(ImagePath)}. Draw a new shape.";
@@ -450,8 +450,8 @@ namespace Wpf.ViewModels
                     RectVisibility = Visibility.Visible;
                     PolygonVisibility = Visibility.Collapsed;
 
-                    SelectedMinIntensity = "N/A";
-                    SelectedMaxIntensity = "N/A";
+                    SelectedMinIntensity = 0;
+                    SelectedMaxIntensity = 0;
                     _currentRoiResult = null;
                 }
             }
@@ -493,8 +493,8 @@ namespace Wpf.ViewModels
                         RectVisibility = Visibility.Collapsed;
                         PolygonVisibility = Visibility.Visible;
 
-                        SelectedMinIntensity = "N/A";
-                        SelectedMaxIntensity = "N/A";
+                        SelectedMinIntensity = 0;
+                        SelectedMaxIntensity = 0;
                         _currentRoiResult = null;
                     }
                     else if (PolygonPoints == null || PolygonPoints.Count == 0)
@@ -535,8 +535,8 @@ namespace Wpf.ViewModels
                     FreehandVisibility = Visibility.Visible;
                     FreehandFillBrush = Brushes.Transparent;
 
-                    SelectedMinIntensity = "N/A";
-                    SelectedMaxIntensity = "N/A";
+                    SelectedMinIntensity = 0;
+                    SelectedMaxIntensity = 0;
                     _currentRoiResult = null;
 
                     CurrentStatusMessage = "Drawing freehand shape... release the mouse to close it.";
@@ -557,8 +557,8 @@ namespace Wpf.ViewModels
                 _isFreehandDrawing = false;
                 FreehandFillBrush = Brushes.Transparent;
 
-                SelectedMinIntensity = "N/A";
-                SelectedMaxIntensity = "N/A";
+                SelectedMinIntensity = 0;
+                SelectedMaxIntensity = 0;
                 _currentRoiResult = null;
             }
         }
@@ -576,8 +576,8 @@ namespace Wpf.ViewModels
                 _isFreehandDrawing = false;
                 FreehandFillBrush = Brushes.Transparent;
 
-                SelectedMinIntensity = "N/A";
-                SelectedMaxIntensity = "N/A";
+                SelectedMinIntensity = 0;
+                SelectedMaxIntensity = 0;
                 _currentRoiResult = null;
             }
         }
@@ -594,8 +594,8 @@ namespace Wpf.ViewModels
                 PolygonVisibility = Visibility.Collapsed;
                 TempLineVisibility = Visibility.Collapsed;
 
-                SelectedMinIntensity = "N/A";
-                SelectedMaxIntensity = "N/A";
+                SelectedMinIntensity = 0;
+                SelectedMaxIntensity = 0;
                 _currentRoiResult = null;
             }
         }
@@ -723,8 +723,8 @@ namespace Wpf.ViewModels
                 CurrentStatusMessage = "Computing rectangle intensities...";
                 _currentRoiResult = await _roiProcessorService.CreateRectangleAsync(ImagePath, scaledRect);
 
-                SelectedMinIntensity = _currentRoiResult.MinValue.ToString();
-                SelectedMaxIntensity = _currentRoiResult.MaxValue.ToString();
+                SelectedMinIntensity = _currentRoiResult.MinValue;
+                SelectedMaxIntensity = _currentRoiResult.MaxValue;
                 CurrentStatusMessage = "Analysis complete.";
             }
             else if (IsPolygonMode && PolygonPoints != null && PolygonPoints.Count > 2)
@@ -742,8 +742,8 @@ namespace Wpf.ViewModels
                 CurrentStatusMessage = "Computing polygon intensities...";
                 _currentRoiResult = await _roiProcessorService.CreatePolygonAsync(ImagePath, polygonRoi);
 
-                SelectedMinIntensity = _currentRoiResult.MinValue.ToString();
-                SelectedMaxIntensity = _currentRoiResult.MaxValue.ToString();
+                SelectedMinIntensity = _currentRoiResult.MinValue;
+                SelectedMaxIntensity = _currentRoiResult.MaxValue;
                 CurrentStatusMessage = "Analysis complete.";
             }
             else if (IsFreehandMode && FreehandPoints != null && FreehandPoints.Count > 2)
@@ -761,8 +761,8 @@ namespace Wpf.ViewModels
                 CurrentStatusMessage = "Computing freehand region intensities...";
                 _currentRoiResult = await _roiProcessorService.CreatePolygonAsync(ImagePath, freehandRoi);
 
-                SelectedMinIntensity = _currentRoiResult.MinValue.ToString();
-                SelectedMaxIntensity = _currentRoiResult.MaxValue.ToString();
+                SelectedMinIntensity = _currentRoiResult.MinValue;
+                SelectedMaxIntensity = _currentRoiResult.MaxValue;
                 CurrentStatusMessage = "Analysis complete.";
             }
         }
@@ -783,8 +783,9 @@ namespace Wpf.ViewModels
                 return;
             }
 
-            int minVal = _currentRoiResult.MinValue;
-            int maxVal = _currentRoiResult.MaxValue;
+            // Rely on the ViewModel's current Min/Max properties (whether calculated or user-edited)
+            int minVal = SelectedMinIntensity;
+            int maxVal = SelectedMaxIntensity;
 
             string? folderPath = Path.GetDirectoryName(ImagePath);
             if (string.IsNullOrEmpty(folderPath)) return;
@@ -1055,8 +1056,8 @@ namespace Wpf.ViewModels
             _isFreehandDrawing = false;
             FreehandFillBrush = Brushes.Transparent;
 
-            SelectedMinIntensity = "N/A";
-            SelectedMaxIntensity = "N/A";
+            SelectedMinIntensity = 0;
+            SelectedMaxIntensity = 0;
             _currentRoiResult = null;
         }
     }

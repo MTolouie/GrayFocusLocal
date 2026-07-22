@@ -322,20 +322,34 @@ VerticalContentAlignment="Center">
                                     <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
 
+                                <!-- Min Value Input -->
                                 <StackPanel Grid.Column="0" Margin="5,0,5,0">
-                                    <TextBlock Text="Min Value" Foreground="{StaticResource MutedTextBrush}" Style="{StaticResource BodyTextStyle}" HorizontalAlignment="Center"/>
-                                    <TextBlock Text="{Binding SelectedMinIntensity}"
-                                               Foreground="#38BDF8"
-                                               FontSize="18" FontWeight="Bold"
-                                               HorizontalAlignment="Center" Margin="0,4,0,0"/>
+                                    <TextBlock Text="Min Value" Foreground="{StaticResource MutedTextBrush}" Style="{StaticResource BodyTextStyle}" HorizontalAlignment="Center" Margin="0,0,0,4"/>
+                                    <TextBox Text="{Binding SelectedMinIntensity, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                 Background="#1E293B" 
+                 Foreground="#38BDF8" 
+                 BorderBrush="{StaticResource BorderBrush}"
+                 FontSize="16" 
+                 FontWeight="Bold"
+                 TextAlignment="Center"
+                 Padding="4" 
+                 Height="32" 
+                 VerticalContentAlignment="Center"/>
                                 </StackPanel>
 
+                                <!-- Max Value Input -->
                                 <StackPanel Grid.Column="1" Margin="5,0,5,0">
-                                    <TextBlock Text="Max Value" Foreground="{StaticResource MutedTextBrush}" Style="{StaticResource BodyTextStyle}" HorizontalAlignment="Center"/>
-                                    <TextBlock Text="{Binding SelectedMaxIntensity}"
-                                               Foreground="#F43F5E"
-                                               FontSize="18" FontWeight="Bold"
-                                               HorizontalAlignment="Center" Margin="0,4,0,0"/>
+                                    <TextBlock Text="Max Value" Foreground="{StaticResource MutedTextBrush}" Style="{StaticResource BodyTextStyle}" HorizontalAlignment="Center" Margin="0,0,0,4"/>
+                                    <TextBox Text="{Binding SelectedMaxIntensity, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                 Background="#1E293B" 
+                 Foreground="#F43F5E" 
+                 BorderBrush="{StaticResource BorderBrush}"
+                 FontSize="16" 
+                 FontWeight="Bold"
+                 TextAlignment="Center"
+                 Padding="4" 
+                 Height="32" 
+                 VerticalContentAlignment="Center"/>
                                 </StackPanel>
                             </Grid>
                         </StackPanel>
