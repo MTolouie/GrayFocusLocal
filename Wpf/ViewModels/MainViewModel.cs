@@ -152,10 +152,10 @@ namespace Wpf.ViewModels
         [ObservableProperty] private bool _isProgressBarVisible = true;
 
         [ObservableProperty]
-        private bool _isGpuSupported = false; // Set this during app initialization
+        private bool _isGpuSupported = false;
 
         [ObservableProperty]
-        private int _selectedDevice = 0; // Default to CPU (0) if no GPU is available
+        private int _selectedDevice = 0; // Default to CPU (0)
 
         public bool? SelectedUseGpu => SelectedDevice switch
         {
@@ -164,30 +164,28 @@ namespace Wpf.ViewModels
             _ => null   // Auto
         };
 
-        /// <summary>
-        /// Call this after LoadingViewModel finishes initialization to pass the detected hardware state.
-        /// </summary>
         public void SetGpuSupport(bool gpuSupported)
         {
             IsGpuSupported = gpuSupported;
 
-            // Optional: Auto-select GPU if supported!
             if (IsGpuSupported)
             {
-                SelectedDevice = 1; // Auto-select "GPU (CUDA Required)" in ComboBox
+                SelectedDevice = 1; // Auto-select GPU
+            }
+            else
+            {
+                SelectedDevice = 0; // Force CPU mode if unsupported (e.g. CUDA < 11)
             }
         }
 
-        // Optional initializer or method called after LoadingViewModel finishes:
         public void InitializeHardwareSupport(bool gpuSupported)
         {
             IsGpuSupported = gpuSupported;
-            if (!IsGpuSupported && SelectedDevice == 1)
+            if (!IsGpuSupported)
             {
                 SelectedDevice = 0; // Fallback to CPU
             }
         }
-
         partial void OnIsTerminalVisibleChanged(bool value)
         {
             if (!value)

@@ -95,11 +95,9 @@ namespace Wpf.Services
                         // CUDA 11+ installs bundled runtime dependencies automatically via [ctk]
                         return (true, $"cupy-cuda{majorVersion}x[ctk]", false);
                     }
-                    else if (majorVersion == 10)
-                    {
-                        // CUDA 10.x requires manual NVIDIA CUDA Toolkit installation on the host machine
-                        return (true, $"cupy-cuda10{minorVersion}", true);
-                    }
+
+                    // CUDA versions below 11 (e.g., CUDA 10) are explicitly unsupported
+                    return (false, null, false);
                 }
             }
             catch (Exception ex)

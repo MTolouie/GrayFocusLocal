@@ -37,7 +37,6 @@ namespace Wpf.ViewModels
                 }
 
                 StatusMessage = "Detecting CUDA & GPU hardware...";
-                StatusMessage = "Detecting CUDA & GPU hardware...";
                 var (isGpuAvailable, cupyPackage, requiresToolkit) = _envService.DetectCudaCapabilities();
 
                 IsGpuSupported = isGpuAvailable;
@@ -45,19 +44,12 @@ namespace Wpf.ViewModels
 
                 if (isGpuAvailable)
                 {
-                    if (requiresToolkit)
-                    {
-                        StatusMessage = "Legacy CUDA detected (CUDA 10.x). NVIDIA CUDA Toolkit 10.2 required.";
-                    }
-                    else
-                    {
-                        StatusMessage = $"NVIDIA CUDA detected. Matching package: {cupyPackage}";
-                    }
+                    StatusMessage = $"NVIDIA CUDA detected. Matching package: {cupyPackage}";
                     await Task.Delay(1000);
                 }
                 else
                 {
-                    StatusMessage = "No compatible NVIDIA GPU found. Defaulting to CPU mode.";
+                    StatusMessage = "No compatible NVIDIA GPU found (CUDA 11+ required). Defaulting to CPU mode.";
                     await Task.Delay(800);
                 }
 

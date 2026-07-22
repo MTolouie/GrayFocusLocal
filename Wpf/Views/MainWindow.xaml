@@ -276,13 +276,10 @@
                Foreground="{StaticResource MutedTextBrush}" 
                Style="{StaticResource SubHeaderTextStyle}" 
                Margin="0,0,0,5"/>
-                                <ComboBox SelectedIndex="{Binding SelectedDevice}" 
-          Height="30" 
-          VerticalContentAlignment="Center">
-                                    <ComboBoxItem Content="CPU"/>
-                                    <ComboBoxItem Content="GPU (CUDA Required)" 
-                  IsEnabled="{Binding IsGpuSupported}"/>
-                                    <ComboBoxItem Content="Automatic (Auto-Detect)"/>
+                                <ComboBox SelectedIndex="{Binding SelectedDevice}">
+                                    <ComboBoxItem Content="CPU Mode" />
+                                    <ComboBoxItem Content="GPU (CUDA Required)" IsEnabled="{Binding IsGpuSupported}" />
+                                    <ComboBoxItem Content="Auto" />
                                 </ComboBox>
                             </StackPanel>
                         </Grid>

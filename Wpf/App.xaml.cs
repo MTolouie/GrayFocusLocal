@@ -82,18 +82,11 @@ namespace Wpf
             // Optional: Auto-select GPU (1) in the combobox if available, otherwise stay on CPU (0)
             if (viewModel.IsGpuSupported)
             {
-                //viewModel.SelectedDevice = 1;
-
-                if (loadingVm.RequiresManualCudaToolkit)
-                {
-                    var result = MessageBox.Show(
-                        "Legacy CUDA 10.x was detected on your system.\n\n" +
-                        "To enable GPU acceleration with CuPy, please make sure the NVIDIA CUDA Toolkit 10.2 is installed on your computer.\n\n",
-                        "NVIDIA CUDA Toolkit Required",
-                        MessageBoxButton.OK,
-                        MessageBoxImage.Warning
-                    );
-                }
+                viewModel.SelectedDevice = 1; // GPU
+            }
+            else
+            {
+                viewModel.SelectedDevice = 0; // CPU
             }
 
             var mainWindow = _serviceProvider.GetRequiredService<MainWindow>();
