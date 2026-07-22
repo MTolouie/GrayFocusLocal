@@ -1,5 +1,6 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using System;
+using System.Diagnostics;
 using System.Windows;
 using Wpf.Services;
 using Wpf.Services.IService;
@@ -31,7 +32,9 @@ namespace Wpf
             // Factories & ViewModels
             services.AddSingleton<IResultWindowFactory, ResultWindowFactory>();
             services.AddTransient<LoadingViewModel>();
-            services.AddTransient<MainViewModel>();
+
+            // CHANGED: Made MainViewModel a Singleton so its GPU state persists cleanly
+            services.AddSingleton<MainViewModel>();
 
             // Views
             services.AddTransient<LoadingWindow>();
@@ -69,8 +72,30 @@ namespace Wpf
                 return;
             }
 
-            // 4. Instantiate Main Window
+            // 4. Instantiate Main Window & Pass CUDA / GPU state
             var viewModel = _serviceProvider.GetRequiredService<MainViewModel>();
+
+            
+            // Transfer the detected GPU support state from LoadingViewModel to MainViewModel
+            viewModel.IsGpuSupported = loadingVm.IsGpuSupported;
+
+            // Optional: Auto-select GPU (1) in the combobox if available, otherwise stay on CPU (0)
+            if (viewModel.IsGpuSupported)
+            {
+                //viewModel.SelectedDevice = 1;
+
+                if (loadingVm.RequiresManualCudaToolkit)
+                {
+                    var result = MessageBox.Show(
+                        "Legacy CUDA 10.x was detected on your system.\n\n" +
+                        "To enable GPU acceleration with CuPy, please make sure the NVIDIA CUDA Toolkit 10.2 is installed on your computer.\n\n",
+                        "NVIDIA CUDA Toolkit Required",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Warning
+                    );
+                }
+            }
+
             var mainWindow = _serviceProvider.GetRequiredService<MainWindow>();
             mainWindow.DataContext = viewModel;
 

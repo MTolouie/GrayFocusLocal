@@ -15,6 +15,8 @@ namespace Wpf.ViewModels
         [ObservableProperty] private bool _isCompleted = false;
         [ObservableProperty] private bool _hasError = false;
         [ObservableProperty] private string _errorMessage = string.Empty;
+        [ObservableProperty] private bool _isGpuSupported = false;
+        [ObservableProperty] private bool _requiresManualCudaToolkit = false;
 
         public LoadingViewModel(PythonEnvironmentService envService)
         {
@@ -30,19 +32,44 @@ namespace Wpf.ViewModels
 
                 if (createdVenv)
                 {
-                    StatusMessage = "Virtual environment created. Packages will be downloaded.";
+                    StatusMessage = "Virtual environment created.";
                     await Task.Delay(1000);
                 }
 
+                StatusMessage = "Detecting CUDA & GPU hardware...";
+                StatusMessage = "Detecting CUDA & GPU hardware...";
+                var (isGpuAvailable, cupyPackage, requiresToolkit) = _envService.DetectCudaCapabilities();
+
+                IsGpuSupported = isGpuAvailable;
+                RequiresManualCudaToolkit = requiresToolkit;
+
+                if (isGpuAvailable)
+                {
+                    if (requiresToolkit)
+                    {
+                        StatusMessage = "Legacy CUDA detected (CUDA 10.x). NVIDIA CUDA Toolkit 10.2 required.";
+                    }
+                    else
+                    {
+                        StatusMessage = $"NVIDIA CUDA detected. Matching package: {cupyPackage}";
+                    }
+                    await Task.Delay(1000);
+                }
+                else
+                {
+                    StatusMessage = "No compatible NVIDIA GPU found. Defaulting to CPU mode.";
+                    await Task.Delay(800);
+                }
+
                 StatusMessage = "Checking required Python packages...";
-                bool packagesReady = await _envService.ArePackagesInstalledAsync();
+                bool packagesReady = await _envService.ArePackagesInstalledAsync(cupyPackage);
 
                 if (!packagesReady)
                 {
-                    StatusMessage = "Required packages missing in venv. Starting download via pip...";
-                    await Task.Delay(1200); // Give user time to read status message
+                    StatusMessage = "Installing required Python packages...";
+                    await Task.Delay(1000);
 
-                    await _envService.InstallPackagesAsync(msg =>
+                    await _envService.InstallPackagesAsync(cupyPackage, msg =>
                     {
                         StatusMessage = msg;
                     });

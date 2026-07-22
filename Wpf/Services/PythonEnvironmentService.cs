@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Text.RegularExpressions;
@@ -30,7 +31,6 @@ namespace Wpf.Services
 
             Directory.CreateDirectory(PyFolderPath);
 
-            // Create venv using system python
             var psi = new ProcessStartInfo
             {
                 FileName = "python",
@@ -52,7 +52,64 @@ namespace Wpf.Services
             return true;
         }
 
-        public async Task<bool> ArePackagesInstalledAsync()
+        /// <summary>
+        /// Detects the highest supported CUDA version on the host machine via nvidia-smi.
+        /// Returns (isSupported, cupyPackageName).
+        /// </summary>
+        public (bool IsGpuAvailable, string? CupyPackageName, bool RequiresManualToolkit) DetectCudaCapabilities()
+        {
+            string? nvidiaSmiPath = ResolveNvidiaSmiPath();
+            if (string.IsNullOrEmpty(nvidiaSmiPath)) return (false, null, false);
+
+            try
+            {
+                var psi = new ProcessStartInfo
+                {
+                    FileName = nvidiaSmiPath,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true
+                };
+
+                using var proc = Process.Start(psi);
+                if (proc == null) return (false, null, false);
+
+                string output = proc.StandardOutput.ReadToEnd();
+                proc.WaitForExit();
+
+                if (proc.ExitCode != 0 || string.IsNullOrWhiteSpace(output))
+                    return (false, null, false);
+
+                var match = Regex.Match(output, @"CUDA\s+Version:\s*(\d+)\.(\d+)", RegexOptions.IgnoreCase);
+                if (match.Success && int.TryParse(match.Groups[1].Value, out int majorVersion))
+                {
+                    int minorVersion = 0;
+                    if (match.Groups.Count > 2)
+                    {
+                        int.TryParse(match.Groups[2].Value, out minorVersion);
+                    }
+
+                    if (majorVersion >= 11)
+                    {
+                        // CUDA 11+ installs bundled runtime dependencies automatically via [ctk]
+                        return (true, $"cupy-cuda{majorVersion}x[ctk]", false);
+                    }
+                    else if (majorVersion == 10)
+                    {
+                        // CUDA 10.x requires manual NVIDIA CUDA Toolkit installation on the host machine
+                        return (true, $"cupy-cuda10{minorVersion}", true);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"CUDA Detection Error: {ex.Message}");
+            }
+
+            return (false, null, false);
+        }
+        public async Task<bool> ArePackagesInstalledAsync(string? cupyPackageName = null)
         {
             string pipPath = GetVenvExecutable("pip");
             if (!File.Exists(pipPath)) return false;
@@ -72,6 +129,7 @@ namespace Wpf.Services
             string output = await proc.StandardOutput.ReadToEndAsync();
             await proc.WaitForExitAsync();
 
+            // Check core dependencies
             foreach (var pkg in RequiredPackages)
             {
                 if (!Regex.IsMatch(output, $@"\b{Regex.Escape(pkg)}\b", RegexOptions.IgnoreCase))
@@ -80,14 +138,35 @@ namespace Wpf.Services
                 }
             }
 
+            // Check CuPy if CUDA is present
+            if (!string.IsNullOrEmpty(cupyPackageName))
+            {
+                // Clean "cupy-cuda12x[ctk]" -> "cupy-cuda12x" for pip list checking
+                string cleanPackageName = Regex.Replace(cupyPackageName, @"\[.*?\]", "").Trim();
+
+                bool isCupyInstalled = Regex.IsMatch(output, @"\bcupy\b", RegexOptions.IgnoreCase) ||
+                                      Regex.IsMatch(output, $@"\b{Regex.Escape(cleanPackageName)}\b", RegexOptions.IgnoreCase);
+
+                if (!isCupyInstalled)
+                {
+                    return false;
+                }
+            }
+
             return true;
         }
 
-        public async Task InstallPackagesAsync(Action<string> statusCallback)
+        public async Task InstallPackagesAsync(string? cupyPackageName, Action<string> statusCallback)
         {
             string pipPath = GetVenvExecutable("pip");
 
-            foreach (var pkg in RequiredPackages)
+            var packagesToInstall = new List<string>(RequiredPackages);
+            if (!string.IsNullOrEmpty(cupyPackageName))
+            {
+                packagesToInstall.Add(cupyPackageName);
+            }
+
+            foreach (var pkg in packagesToInstall)
             {
                 statusCallback?.Invoke($"Installing package: {pkg}...");
 
@@ -112,6 +191,36 @@ namespace Wpf.Services
                     }
                 }
             }
+        }
+
+        private static string? ResolveNvidiaSmiPath()
+        {
+            string[] knownPaths = new[]
+            {
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "nvidia-smi.exe"),
+                @"C:\Program Files\NVIDIA Corporation\NVSMI\nvidia-smi.exe"
+            };
+
+            foreach (var path in knownPaths)
+            {
+                if (File.Exists(path)) return path;
+            }
+
+            string? pathEnv = Environment.GetEnvironmentVariable("PATH");
+            if (!string.IsNullOrEmpty(pathEnv))
+            {
+                foreach (string folder in pathEnv.Split(Path.PathSeparator))
+                {
+                    try
+                    {
+                        string fullPath = Path.Combine(folder.Trim(), "nvidia-smi.exe");
+                        if (File.Exists(fullPath)) return fullPath;
+                    }
+                    catch { }
+                }
+            }
+
+            return null;
         }
 
         private string GetVenvExecutable(string exeName)
