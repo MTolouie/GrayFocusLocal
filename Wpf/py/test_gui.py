@@ -759,6 +759,8 @@ class App(tk.Tk):
         for pid in current_ids:
             try:
                 arr = self.processor.get_image(self.session_id, pid)
+                if arr.dtype == np.uint16:
+                    arr = (arr >> 8).astype(np.uint8)
                 rgb = cv2.cvtColor(arr, cv2.COLOR_BGR2RGB)
                 pil = Image.fromarray(rgb)
                 pil.thumbnail((700, 210))
@@ -807,6 +809,9 @@ class App(tk.Tk):
         except Exception as ex:
             self._log(f"[Hata]: Buyutme için goruntu alinamadi: {ex}", "error")
             return
+
+        if arr.dtype == np.uint16:
+            arr = (arr >> 8).astype(np.uint8)
 
         rgb = cv2.cvtColor(arr, cv2.COLOR_BGR2RGB)
         pil_full = Image.fromarray(rgb)
