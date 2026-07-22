@@ -430,7 +430,7 @@ class GrayscaleProcessor:
                         # 16-bit'te kırmızı kanal maksimum değeri 65535
                         img_color[mask > 0] = [0, 0, 65535]
 
-                    preview_id = f"[{session_id}]_[{target_slot + 1}]"
+                    preview_id = os.path.basename(image_path)
 
                     if existing is not None:
                         # Mevcut kova sahibini bellekten çıkar
