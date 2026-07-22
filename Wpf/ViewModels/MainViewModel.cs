@@ -949,6 +949,12 @@ namespace Wpf.ViewModels
                 resultWin.Owner = System.Windows.Application.Current.MainWindow;
                 resultWin.Closed += async (s, e) =>
                 {
+                    // Re-activate MainWindow on the UI thread to keep it in the foreground
+                    System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                    {
+                        System.Windows.Application.Current.MainWindow?.Activate();
+                    });
+
                     try { await _processingService.CleanUpDataAsync(sessionId); }
                     catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"CleanUp Error: {ex.Message}"); }
                 };

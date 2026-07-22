@@ -27,11 +27,11 @@
                HorizontalAlignment="Center"/>
 
             <Button Content="Save The Images"
-            DockPanel.Dock="Right"
-            HorizontalAlignment="Right"
-            Style="{StaticResource AccentButtonStyle}"
-            Command="{Binding SaveImagesCommand}"
-            Height="30" Width="100"/>
+        DockPanel.Dock="Right"
+        HorizontalAlignment="Right"
+        Style="{StaticResource AccentButtonStyle}"
+        Command="{Binding SaveImagesCommand}"
+        Height="30" Width="100"/>
         </DockPanel>
 
 

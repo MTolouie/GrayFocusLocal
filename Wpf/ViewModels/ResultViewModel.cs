@@ -88,11 +88,10 @@ namespace Wpf.ViewModels
             {
                 var data = await _processingService.GetPreviewImageAsync(item.SessionId, item.PreviewId);
 
-                // CHANGED: Use PixelFormats.Gray16 for native 16-bit grayscale buffer
                 var bitmap = BitmapSource.Create(
                     data.Width, data.Height,
                     96, 96,
-                    PixelFormats.Rgb48, // <--- Formerly PixelFormats.Bgr24
+                    PixelFormats.Rgb48,
                     null,
                     data.PixelData,
                     data.Stride);
@@ -106,6 +105,11 @@ namespace Wpf.ViewModels
             {
                 item.IsLoading = false;
                 item.ErrorMessage = $"Failed to load: {ex.Message}";
+            }
+            finally
+            {
+                // 3. Re-evaluate whether the Save button can be clicked as each image finishes
+                SaveImagesCommand.NotifyCanExecuteChanged();
             }
         }
 
@@ -221,7 +225,8 @@ namespace Wpf.ViewModels
             e.Handled = true;
         }
 
-        [RelayCommand]
+        // 1. Tell the command to check CanSaveImages to determine if the button is enabled
+        [RelayCommand(CanExecute = nameof(CanSaveImages))]
         private async Task SaveImages()
         {
             try
@@ -276,6 +281,12 @@ namespace Wpf.ViewModels
             {
                 MessageBox.Show($"Failed to save images: {ex.Message}", "Save Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
+        }
+
+        // 2. The condition: Returns TRUE only if there is at least 1 item and NONE are loading
+        private bool CanSaveImages()
+        {
+            return Items.Count > 0 && Items.All(item => !item.IsLoading);
         }
     }
 }
