@@ -6,7 +6,7 @@
         Height="700" Width="850"
         Background="{StaticResource WindowBackgroundBrush}"
         WindowStartupLocation="CenterOwner">
-
+    
     <i:Interaction.Triggers>
         <i:EventTrigger EventName="KeyDown">
             <i:InvokeCommandAction 
@@ -21,11 +21,20 @@
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
-        <TextBlock Grid.Row="0" 
-                   Text="Python API Batch Output Results Gallery" 
-                   Style="{StaticResource HeaderTextStyle}" 
-                   Margin="0,0,0,15" 
-                   HorizontalAlignment="Center"/>
+        <DockPanel Grid.Row="0" Margin="30,5,30,5">
+            <TextBlock Text="Python API Batch Output Results Gallery" 
+               Style="{StaticResource HeaderTextStyle}" 
+               HorizontalAlignment="Center"/>
+
+            <Button Content="Save The Images"
+            DockPanel.Dock="Right"
+            HorizontalAlignment="Right"
+            Style="{StaticResource AccentButtonStyle}"
+            Command="{Binding SaveImagesCommand}"
+            Height="30" Width="100"/>
+        </DockPanel>
+
+
 
         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
             <ItemsControl ItemsSource="{Binding Items}">

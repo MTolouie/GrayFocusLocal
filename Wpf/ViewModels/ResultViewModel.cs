@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.Input;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -32,6 +33,9 @@ namespace Wpf.ViewModels
         public ObservableCollection<PreviewImageItem> Items { get; } = new();
 
         [ObservableProperty] private PreviewImageItem? _hoveredItem;
+
+        
+
 
         public ResultViewModel(
     List<(string SessionId, string PreviewId, string FileName)> previewRefs,
@@ -215,6 +219,58 @@ namespace Wpf.ViewModels
             }
 
             e.Handled = true;
+        }
+
+        [RelayCommand]
+        private async Task SaveImages()
+        {
+            
+            try
+            {
+                // TODO: replace with the actual py-folder base path from PythonEngineService
+                string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+                string outputDir = Path.GetFullPath(Path.Combine(baseDir, @"..\..\..\py\savedImages"));
+
+                if (!Directory.Exists(outputDir))
+                    Directory.CreateDirectory(outputDir);
+
+                int saved = 0;
+                int skipped = 0;
+
+                await Task.Run(() =>
+                {
+                    foreach (var item in Items)
+                    {
+                        if (item.ImageSource is not BitmapSource bitmap)
+                        {
+                            skipped++;
+                            continue;
+                        }
+
+                        string safeName = string.IsNullOrWhiteSpace(item.Label)
+                            ? item.PreviewId
+                            : Path.GetFileNameWithoutExtension(item.Label);
+
+                        string filePath = Path.Combine(outputDir, $"{safeName}.png");
+
+                        var encoder = new PngBitmapEncoder();
+                        encoder.Frames.Add(BitmapFrame.Create(bitmap));
+
+                        using var fs = new FileStream(filePath, FileMode.Create, FileAccess.Write);
+                        encoder.Save(fs);
+                        saved++;
+                    }
+                });
+
+                MessageBox.Show(
+                    $"Saved {saved} image(s) to:\n{outputDir}" + (skipped > 0 ? $"\n({skipped} not yet loaded, skipped)" : ""),
+                    "Save Complete", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Failed to save images: {ex.Message}", "Save Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+           
         }
     }
 }

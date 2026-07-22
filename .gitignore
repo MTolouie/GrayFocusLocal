@@ -364,3 +364,5 @@ FodyWeavers.xsd
 
 # Python Virtual Environment
 venv/
+
+wpf/py/savedImages/
