@@ -1,10 +1,20 @@
 ﻿<Window x:Class="Wpf.Views.ResultWindow"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:i="http://schemas.microsoft.com/xaml/behaviors"
         Title="Batch Analysis Results" 
         Height="700" Width="850"
         Background="{StaticResource WindowBackgroundBrush}"
         WindowStartupLocation="CenterOwner">
+
+    <i:Interaction.Triggers>
+        <i:EventTrigger EventName="KeyDown">
+            <i:InvokeCommandAction 
+                Command="{Binding WindowKeyDownCommand}" 
+                PassEventArgsToCommand="True"/>
+        </i:EventTrigger>
+    </i:Interaction.Triggers>
+
     <Grid Margin="15">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -22,21 +32,26 @@
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
                         <Border Background="{StaticResource EditorBackgroundBrush}" 
-                        BorderBrush="{StaticResource BorderBrush}" 
-                        BorderThickness="1" 
-                        CornerRadius="6" 
-                        Margin="0,0,0,20" 
-                        Padding="10">
+                                BorderBrush="{StaticResource BorderBrush}" 
+                                BorderThickness="1" 
+                                CornerRadius="6" 
+                                Margin="0,0,0,20" 
+                                Padding="10">
                             <StackPanel>
-                                <TextBlock Text="{Binding Label}" 
-                                   Style="{StaticResource SubHeaderTextStyle}" 
-                                   Margin="5,0,0,10" 
-                                   Foreground="{StaticResource MutedTextBrush}"/>
+                                <DockPanel Margin="5,0,5,10">
+                                    <TextBlock Text="{Binding Label}" 
+                                               Style="{StaticResource SubHeaderTextStyle}" 
+                                               Foreground="{StaticResource MutedTextBrush}"/>
+                                    <TextBlock Text="{Binding ZoomScale, StringFormat='Zoom: {0:F1}x'}" 
+                                               HorizontalAlignment="Right"
+                                               Foreground="{StaticResource MutedTextBrush}"
+                                               FontSize="12"/>
+                                </DockPanel>
 
                                 <TextBlock Text="⏳ Loading preview..."
-                                   HorizontalAlignment="Center"
-                                   Foreground="{StaticResource MutedTextBrush}"
-                                   Margin="0,20">
+                                           HorizontalAlignment="Center"
+                                           Foreground="{StaticResource MutedTextBrush}"
+                                           Margin="0,20">
                                     <TextBlock.Style>
                                         <Style TargetType="TextBlock">
                                             <Style.Triggers>
@@ -48,20 +63,51 @@
                                     </TextBlock.Style>
                                 </TextBlock>
 
-                                <Image Source="{Binding ImageSource}" 
-       Stretch="Uniform" MaxHeight="500" 
-       HorizontalAlignment="Center">
-                                    <Image.Style>
-                                        <Style TargetType="Image">
-                                            <Setter Property="Visibility" Value="Collapsed"/>
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding IsLoading}" Value="False">
-                                                    <Setter Property="Visibility" Value="Visible"/>
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </Image.Style>
-                                </Image>
+                                <!-- PREVIEW CONTAINER -->
+                                <ScrollViewer x:Name="ImageScrollViewer"
+                                              Height="450" 
+                                              HorizontalScrollBarVisibility="Hidden" 
+                                              VerticalScrollBarVisibility="Hidden"
+                                              Focusable="True"
+                                              Background="#0F172A">
+
+                                    <i:Interaction.Triggers>
+                                        <i:EventTrigger EventName="PreviewMouseWheel">
+                                            <i:InvokeCommandAction 
+                                                Command="{Binding DataContext.ImageMouseWheelCommand, RelativeSource={RelativeSource AncestorType=Window}}" 
+                                                PassEventArgsToCommand="True"/>
+                                        </i:EventTrigger>
+                                        <i:EventTrigger EventName="MouseEnter">
+                                            <i:InvokeCommandAction 
+                                                Command="{Binding DataContext.SetHoveredItemCommand, RelativeSource={RelativeSource AncestorType=Window}}" 
+                                                CommandParameter="{Binding}"/>
+                                        </i:EventTrigger>
+                                    </i:Interaction.Triggers>
+
+                                    <!-- Anchor image at Top-Left so whole slice fits in frame initially -->
+                                    <Grid HorizontalAlignment="Left" VerticalAlignment="Top">
+                                        <Image Source="{Binding ImageSource}" 
+                                               MaxHeight="430"
+                                               MaxWidth="800"
+                                               Stretch="Uniform"
+                                               RenderOptions.BitmapScalingMode="NearestNeighbor">
+                                            <Image.LayoutTransform>
+                                                <ScaleTransform ScaleX="{Binding ZoomScale}" 
+                                                                ScaleY="{Binding ZoomScale}"/>
+                                            </Image.LayoutTransform>
+                                            <Image.Style>
+                                                <Style TargetType="Image">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsLoading}" Value="False">
+                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Image.Style>
+                                        </Image>
+                                    </Grid>
+                                </ScrollViewer>
                             </StackPanel>
                         </Border>
                     </DataTemplate>

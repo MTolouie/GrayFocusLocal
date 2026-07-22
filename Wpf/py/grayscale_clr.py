@@ -232,7 +232,7 @@ class GrayscaleProcessor:
             raise KeyError(
                 f"'{preview_id}' önizlemesi '{session_id}' oturumunda bulunamadı."
             )
-        return img
+        return img[..., ::-1]
 
     def cleanup_session(self, session_id: str) -> None:
         """

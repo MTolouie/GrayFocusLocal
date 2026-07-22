@@ -143,7 +143,7 @@ namespace Wpf.ViewModels
         [ObservableProperty] private string _calculatedVolumeMessage = "Total Volume: N/A";
 
         // How many preview images the user wants the API to send back
-        [ObservableProperty] private int _previewCount = 10;
+        [ObservableProperty] private int _previewCount = 3;
 
         // ADD THIS LINE FOR THE PROGRESS BAR
         [ObservableProperty] private double _progressValue;

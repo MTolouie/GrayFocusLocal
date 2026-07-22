@@ -137,13 +137,14 @@ namespace Wpf.Services
             {
                 using (Py.GIL())
                 {
-                    // get_image() returns an 8-bit BGR numpy ndarray
-                    // (shape = [height, width, 3]), never bytes over HTTP.
                     dynamic img = _engine.Processor.get_image(sessionId, previewId);
 
                     int height = (int)img.shape[0];
                     int width = (int)img.shape[1];
-                    int stride = width * 3; // BGR24, no numpy row padding from cv2 output
+                    int channels = (int)img.shape[2]; // 3 (now RGB order)
+
+                    int bytesPerPixel = 2 * channels; // 6 for 16-bit RGB
+                    int stride = width * bytesPerPixel;
 
                     PyObject rawBytes = img.tobytes();
                     byte[] buffer = (byte[])rawBytes.As<byte[]>();

@@ -22,6 +22,9 @@ namespace Wpf.Helpers
         [ObservableProperty] private bool _isLoading = true;
         [ObservableProperty] private string? _errorMessage;
 
+        // --- ZOOM SUPPORT ---
+        [ObservableProperty] private double _zoomScale = 1.0;
+
         public PreviewImageItem(string sessionId, string previewId)
         {
             SessionId = sessionId;
