@@ -224,10 +224,8 @@ namespace Wpf.ViewModels
         [RelayCommand]
         private async Task SaveImages()
         {
-            
             try
             {
-                // TODO: replace with the actual py-folder base path from PythonEngineService
                 string baseDir = AppDomain.CurrentDomain.BaseDirectory;
                 string outputDir = Path.GetFullPath(Path.Combine(baseDir, @"..\..\..\py\savedImages"));
 
@@ -251,7 +249,15 @@ namespace Wpf.ViewModels
                             ? item.PreviewId
                             : Path.GetFileNameWithoutExtension(item.Label);
 
+                        // --- 1. Construct initial path ---
                         string filePath = Path.Combine(outputDir, $"{safeName}.png");
+
+                        // --- 2. Prevent Overwriting: Add a number suffix if file exists ---
+                        int counter = 1;
+                        while (File.Exists(filePath))
+                        {
+                            filePath = Path.Combine(outputDir, $"{safeName}_{counter++}.png");
+                        }
 
                         var encoder = new PngBitmapEncoder();
                         encoder.Frames.Add(BitmapFrame.Create(bitmap));
@@ -270,7 +276,6 @@ namespace Wpf.ViewModels
             {
                 MessageBox.Show($"Failed to save images: {ex.Message}", "Save Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
-           
         }
     }
 }
