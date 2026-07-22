@@ -165,6 +165,7 @@ class GrayscaleProcessor:
         total_expected_images: int = 0,
         preview_count: int = 10,
         reporting_level: str = "steps",
+        preview_bit_depth: int = 16,
     ) -> None:
         """
         Yeni bir işleme oturumu oluşturur (veya sıfırlar).
@@ -178,6 +179,7 @@ class GrayscaleProcessor:
             "total_expected_images": total_expected_images,
             "preview_count": max(1, preview_count),
             "reporting_level": str(reporting_level).lower(),
+            "preview_bit_depth": preview_bit_depth,
             "processed_count": 0,
             "global_total_pixels": 0,
             # Küme-kova önizleme durumu
@@ -411,10 +413,22 @@ class GrayscaleProcessor:
                 )
 
                 if keep:
-                    # Yolnızca önizleme için 8-bit'e dönüştür
-                    img_8bit  = (img >> 8).astype(np.uint8)
-                    img_color = cv2.cvtColor(img_8bit, cv2.COLOR_GRAY2BGR)
-                    img_color[mask > 0] = [0, 0, 255]
+                    # Önizleme formatını seç
+                    is_8bit = session.get("preview_bit_depth", 16) == 8
+                    
+                    if is_8bit:
+                        # 8-bit'e dönüştür
+                        img_preview = (img >> 8).astype(np.uint8) if img.dtype == np.uint16 else img.astype(np.uint8)
+                        img_color = cv2.cvtColor(img_preview, cv2.COLOR_GRAY2BGR)
+                        img_color[mask > 0] = [0, 0, 255]
+                    else:
+                        # 16-bit olarak bırak
+                        img_preview = img.copy()
+                        if img_preview.dtype != np.uint16:
+                            img_preview = img_preview.astype(np.uint16)
+                        img_color = cv2.cvtColor(img_preview, cv2.COLOR_GRAY2BGR)
+                        # 16-bit'te kırmızı kanal maksimum değeri 65535
+                        img_color[mask > 0] = [0, 0, 65535]
 
                     preview_id = os.path.basename(image_path)
 
