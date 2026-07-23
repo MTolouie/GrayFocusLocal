@@ -8,7 +8,7 @@
         xmlns:helpers="clr-namespace:Wpf.Helpers"
         mc:Ignorable="d"
         Title="16-Bit Grayscale Pixel Range Scanner" 
-        Height="800" Width="1100"
+        Height="820" Width="1100"
         Background="{StaticResource WindowBackgroundBrush}"
         WindowStartupLocation="CenterScreen">
     <Window.Resources>
@@ -272,16 +272,19 @@
                                                   
                             </StackPanel>
                             <StackPanel Grid.Column="1" Margin="0,0,0,15">
-                                <TextBlock Text="Processing Device" 
+    <TextBlock Text="Processing Device" 
                Foreground="{StaticResource MutedTextBrush}" 
                Style="{StaticResource SubHeaderTextStyle}" 
                Margin="0,0,0,5"/>
-                                <ComboBox SelectedIndex="{Binding SelectedDevice}">
-                                    <ComboBoxItem Content="CPU Mode" />
-                                    <ComboBoxItem Content="GPU (CUDA Required)" IsEnabled="{Binding IsGpuSupported}" />
-                                    <ComboBoxItem Content="Auto" />
-                                </ComboBox>
-                            </StackPanel>
+               
+    <!-- Applied Style Here -->
+    <ComboBox SelectedIndex="{Binding SelectedDevice}"
+              Style="{StaticResource DarkComboBoxStyle}">
+        <ComboBoxItem Content="CPU Mode" />
+        <ComboBoxItem Content="GPU (CUDA Required)" IsEnabled="{Binding IsGpuSupported}" />
+        <ComboBoxItem Content="Auto" />
+    </ComboBox>
+</StackPanel>
                         </Grid>
                     </Border>
                     <Border Style="{StaticResource CardPanelStyle}" Margin="0,0,0,15">
