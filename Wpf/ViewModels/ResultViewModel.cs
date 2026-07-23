@@ -26,7 +26,6 @@ namespace Wpf.ViewModels
     /// </summary>
     public partial class ResultViewModel : ObservableObject
     {
-        private const int MaxConcurrentLoads = 4;
 
         private readonly IImageProcessingService _processingService;
 
@@ -38,17 +37,17 @@ namespace Wpf.ViewModels
 
 
         public ResultViewModel(
-    List<(string SessionId, string PreviewId, string FileName)> previewRefs,
+    List<(string SessionId, string PreviewId)> previewRefs,
     IImageProcessingService processingService)
         {
             _processingService = processingService;
 
-            foreach (var (sessionId, previewId, fileName) in previewRefs)
+            foreach (var (sessionId, previewId) in previewRefs)
             {
                 // FIXED: Instead of mapping the previewId to the UI label, map the exact file name
                 var item = new PreviewImageItem(sessionId, previewId)
                 {
-                    Label = fileName
+                    Label = previewId
                 };
                 Items.Add(item);
             }
@@ -64,22 +63,14 @@ namespace Wpf.ViewModels
 
         private async Task LoadImagesInParallelAsync()
         {
-            using var throttle = new SemaphoreSlim(MaxConcurrentLoads);
-
-            var tasks = Items.Select(async item =>
+            // Process items sequentially on a background thread to avoid GIL lock contention
+            await Task.Run(async () =>
             {
-                await throttle.WaitAsync();
-                try
+                foreach (var item in Items)
                 {
                     await LoadSingleImageAsync(item);
                 }
-                finally
-                {
-                    throttle.Release();
-                }
             });
-
-            await Task.WhenAll(tasks);
         }
 
         private async Task LoadSingleImageAsync(PreviewImageItem item)
@@ -97,19 +88,28 @@ namespace Wpf.ViewModels
                     data.Stride);
                 bitmap.Freeze();
 
-                item.ImageSource = bitmap;
-                item.ZoomScale = 1.0;
-                item.IsLoading = false;
+                // Dispatch UI property updates back to the UI Thread
+                System.Windows.Application.Current?.Dispatcher?.Invoke(() =>
+                {
+                    item.ImageSource = bitmap;
+                    item.ZoomScale = 1.0;
+                    item.IsLoading = false;
+                });
             }
             catch (Exception ex)
             {
-                item.IsLoading = false;
-                item.ErrorMessage = $"Failed to load: {ex.Message}";
+                System.Windows.Application.Current?.Dispatcher?.Invoke(() =>
+                {
+                    item.IsLoading = false;
+                    item.ErrorMessage = $"Failed to load: {ex.Message}";
+                });
             }
             finally
             {
-                // 3. Re-evaluate whether the Save button can be clicked as each image finishes
-                SaveImagesCommand.NotifyCanExecuteChanged();
+                System.Windows.Application.Current?.Dispatcher?.Invoke(() =>
+                {
+                    SaveImagesCommand.NotifyCanExecuteChanged();
+                });
             }
         }
 
@@ -231,15 +231,28 @@ namespace Wpf.ViewModels
         {
             try
             {
-                string baseDir = AppDomain.CurrentDomain.BaseDirectory;
-                string outputDir = Path.GetFullPath(Path.Combine(baseDir, @"..\..\..\py\savedImages"));
 
-                if (!Directory.Exists(outputDir))
-                    Directory.CreateDirectory(outputDir);
+                // 1. Open the Folder Picker Dialog
+                var dialog = new Microsoft.Win32.OpenFolderDialog
+                {
+                    Title = "Select Destination Folder for Processed Images",
+                    Multiselect = false
+                };
+
+                // Show dialog and check if the user selected a folder
+                bool? result = dialog.ShowDialog();
+                if (result != true || string.IsNullOrWhiteSpace(dialog.FolderName))
+                {
+                    return; // User canceled the dialog
+                }
+
+                string outputDir = dialog.FolderName;
+
 
                 int saved = 0;
                 int skipped = 0;
 
+                // 2. Save images on a background thread
                 await Task.Run(() =>
                 {
                     foreach (var item in Items)
@@ -254,10 +267,10 @@ namespace Wpf.ViewModels
                             ? item.PreviewId
                             : Path.GetFileNameWithoutExtension(item.Label);
 
-                        // --- 1. Construct initial path ---
+                        // Construct initial file path
                         string filePath = Path.Combine(outputDir, $"{safeName}.png");
 
-                        // --- 2. Prevent Overwriting: Add a number suffix if file exists ---
+                        // Prevent overwriting existing files by appending a counter
                         int counter = 1;
                         while (File.Exists(filePath))
                         {

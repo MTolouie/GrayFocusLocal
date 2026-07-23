@@ -54,7 +54,7 @@ namespace Wpf.ViewModels
         // There's no server to build a URL for anymore — this now stores the
         // (sessionId, previewId) pairs ResultViewModel needs to call
         // GetPreviewImageAsync itself.
-        private List<(string SessionId, string PreviewId, string FileName)> _processedResultsPaths = new();
+        private readonly List<(string SessionId, string PreviewId)> _processedResultsPaths = new();
 
         [ObservableProperty] private string? _imagePath;
         [ObservableProperty] private string _imageDisplayTitle = "Original Photo";
@@ -164,6 +164,24 @@ namespace Wpf.ViewModels
             _ => null   // Auto
         };
 
+        private bool _isProcessing;
+
+        public bool IsProcessing
+        {
+            get => _isProcessing;
+            set
+            {
+                if (SetProperty(ref _isProcessing, value))
+                {
+                    // Marshal the state change update back to the UI Thread instantly!
+                    System.Windows.Application.Current?.Dispatcher?.BeginInvoke(new Action(() =>
+                    {
+                        AbortProcessingCommand.NotifyCanExecuteChanged();
+                        SendImageCommand.NotifyCanExecuteChanged(); // Disables the Scan button during processing too!
+                    }));
+                }
+            }
+        }
         public void SetGpuSupport(bool gpuSupported)
         {
             IsGpuSupported = gpuSupported;
@@ -193,27 +211,6 @@ namespace Wpf.ViewModels
                 IsProgressBarVisible = false;
             }
         }
-
-
-        private bool _isProcessing;
-
-        public bool IsProcessing
-        {
-            get => _isProcessing;
-            set
-            {
-                if (SetProperty(ref _isProcessing, value))
-                {
-                    // Marshal the state change update back to the UI Thread instantly!
-                    System.Windows.Application.Current?.Dispatcher?.BeginInvoke(new Action(() =>
-                    {
-                        AbortProcessingCommand.NotifyCanExecuteChanged();
-                        SendImageCommand.NotifyCanExecuteChanged(); // Disables the Scan button during processing too!
-                    }));
-                }
-            }
-        }
-
 
         // Automatically recalculates whenever any geometric field changes
         partial void OnFodValueChanged(double value) => RecalculateObjectResolution();
@@ -966,8 +963,8 @@ namespace Wpf.ViewModels
                 _processedResultsPaths.Clear();
                 for (int i = 0; i < sessionSummary.PeriodicPreviews.Count; i++)
                 {
-                    string previewPath = sessionSummary.PeriodicPreviews[i];
-                    _processedResultsPaths.Add((sessionId, previewPath, previewPath));
+                    string previewId = sessionSummary.PeriodicPreviews[i];
+                    _processedResultsPaths.Add((sessionId, previewId));
                 }
 
                 var resultWin = _resultWindowFactory.Create(_processedResultsPaths);

@@ -17,12 +17,7 @@ namespace Wpf.Services.IService
     {
         Task<ResponseDTO> SendDataAsync(ScanRequestDTO request);
 
-        Task<ProcessingProgress> ProcessImageAsync(string sessionId, string imagePath, int currentIdx, Action<ProcessingProgress> progressReporter);
-    
-
         Task<PreviewImageData> GetPreviewImageAsync(string sessionId, string previewId);
-
-        Task<SessionResultsDTO> GetSessionResultsAsync(string sessionId);
 
         Task CleanUpDataAsync(string sessionId);
 

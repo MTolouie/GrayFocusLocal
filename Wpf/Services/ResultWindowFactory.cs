@@ -19,7 +19,7 @@ namespace Wpf.Services
             _processingService = processingService;
         }
 
-        public ResultWindow Create(List<(string SessionId, string PreviewId, string FileName)> previewRefs)
+        public ResultWindow Create(List<(string SessionId, string PreviewId)> previewRefs)
         {
             var viewModel = new ResultViewModel(previewRefs, _processingService);
             return new ResultWindow(viewModel);
