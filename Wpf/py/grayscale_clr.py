@@ -232,7 +232,7 @@ class GrayscaleProcessor:
             raise KeyError(
                 f"'{preview_id}' önizlemesi '{session_id}' oturumunda bulunamadı."
             )
-        return img[..., ::-1]
+        return img
 
     def cleanup_session(self, session_id: str) -> None:
         """
@@ -383,6 +383,7 @@ class GrayscaleProcessor:
                 if range_expanded and session["preview_slots"]:
                     old_slots = dict(session["preview_slots"])
                     session["preview_slots"] = {}
+                    evicted_items = []
                     
                     for item in old_slots.values():
                         new_slot = _slot_for(item["pixels"], pmin, pmax, n)
@@ -393,14 +394,28 @@ class GrayscaleProcessor:
                         else:
                             center = _slot_center(new_slot, pmin, pmax, n)
                             if abs(item["pixels"] - center) < abs(existing["pixels"] - center):
-                                # item is closer to center: delete existing, keep item
-                                if existing["id"] in session["preview_images"]:
-                                    del session["preview_images"][existing["id"]]
+                                evicted_items.append(existing)
                                 session["preview_slots"][new_slot] = item
                             else:
-                                # existing is closer: delete item, keep existing
-                                if item["id"] in session["preview_images"]:
-                                    del session["preview_images"][item["id"]]
+                                evicted_items.append(item)
+
+                    # Reposition evicted items into available vacant slots
+                    for evicted in evicted_items:
+                        ideal_slot = _slot_for(evicted["pixels"], pmin, pmax, n)
+                        placed = False
+                        # Search nearest open slots
+                        for delta in range(1, n):
+                            for sign in (-1, 1):
+                                candidate_slot = ideal_slot + sign * delta
+                                if 0 <= candidate_slot < n and candidate_slot not in session["preview_slots"]:
+                                    session["preview_slots"][candidate_slot] = evicted
+                                    placed = True
+                                    break
+                            if placed:
+                                break
+                        if not placed:
+                            if evicted["id"] in session["preview_images"]:
+                                del session["preview_images"][evicted["id"]]
 
                 # Geçerli görüntünün hedef kovasını belirle
                 target_slot = _slot_for(px, pmin, pmax, n)
@@ -411,6 +426,23 @@ class GrayscaleProcessor:
                     existing is None
                     or abs(px - center) < abs(existing["pixels"] - center)
                 )
+
+                evicted_target = None
+                if keep and existing is not None:
+                    evicted_target = existing
+
+                # Fallback: if not keeping for target_slot directly, try placing into an adjacent empty slot
+                actual_slot = target_slot
+                if not keep:
+                    for delta in range(1, n):
+                        for sign in (-1, 1):
+                            cand_slot = target_slot + sign * delta
+                            if 0 <= cand_slot < n and cand_slot not in session["preview_slots"]:
+                                actual_slot = cand_slot
+                                keep = True
+                                break
+                        if keep:
+                            break
 
                 if keep:
                     # Önizleme formatını seç
@@ -432,12 +464,23 @@ class GrayscaleProcessor:
 
                     preview_id = os.path.basename(image_path)
 
-                    if existing is not None:
-                        # Mevcut kova sahibini bellekten çıkar
-                        del session["preview_images"][existing["id"]]
+                    if evicted_target is not None and actual_slot == target_slot:
+                        # Rehome evicted_target to another slot if possible
+                        placed = False
+                        for delta in range(1, n):
+                            for sign in (-1, 1):
+                                c_slot = target_slot + sign * delta
+                                if 0 <= c_slot < n and c_slot not in session["preview_slots"]:
+                                    session["preview_slots"][c_slot] = evicted_target
+                                    placed = True
+                                    break
+                            if placed:
+                                break
+                        if not placed and evicted_target["id"] in session["preview_images"]:
+                            del session["preview_images"][evicted_target["id"]]
 
                     session["preview_images"][preview_id] = img_color
-                    session["preview_slots"][target_slot]  = {"id": preview_id, "pixels": px}
+                    session["preview_slots"][actual_slot]  = {"id": preview_id, "pixels": px}
                     saved_preview_id = preview_id
 
             # ── Tamamlandı – yerel dict döndür ────────────────────────────
