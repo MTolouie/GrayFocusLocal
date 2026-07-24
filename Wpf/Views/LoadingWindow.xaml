@@ -2,15 +2,17 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Environment Setup" 
-        Height="220" Width="450"
+        SizeToContent="WidthAndHeight"
+        MinWidth="420" MinHeight="180"
         WindowStyle="None"
         ResizeMode="NoResize"
         WindowStartupLocation="CenterScreen"
         Background="{StaticResource LoadingWindowBackgroundBrush}">
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVisConverter"/>
-        </Window.Resources>
-            <Border BorderBrush="{StaticResource LoadingBorderBrush}" BorderThickness="1" CornerRadius="8">
+    </Window.Resources>
+
+    <Border BorderBrush="{StaticResource LoadingBorderBrush}" BorderThickness="1" CornerRadius="8">
         <Grid Margin="25">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
@@ -46,6 +48,7 @@
                        Foreground="#F43F5E" 
                        FontSize="11" 
                        TextWrapping="Wrap"
+                       Margin="0,10,0,0"
                        Visibility="{Binding HasError, Converter={StaticResource BoolToVisConverter}}"/>
         </Grid>
     </Border>

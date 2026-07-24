@@ -9,6 +9,7 @@
         mc:Ignorable="d"
         Title="16-Bit Grayscale Pixel Range Scanner" 
         Height="820" Width="1100"
+        MinHeight="650" MinWidth="900"
         Background="{StaticResource WindowBackgroundBrush}"
         WindowStartupLocation="CenterScreen">
     <Window.Resources>
@@ -18,16 +19,17 @@
     </Window.Resources>
     <Grid>
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="2*" MinWidth="400" />
             <ColumnDefinition Width="Auto" />
-            <ColumnDefinition Width="380" />
+            <ColumnDefinition Width="*" MinWidth="340" MaxWidth="500" />
         </Grid.ColumnDefinitions>
         <Grid.RowDefinitions>
-            <RowDefinition Height="*" />
+            <RowDefinition Height="*" MinHeight="250" />
             <RowDefinition Height="Auto" />
-            <RowDefinition Height="200" />
+            <RowDefinition Height="200" MinHeight="100" MaxHeight="350" />
         </Grid.RowDefinitions>
 
+        <!-- Main Image Workspace -->
         <Border Grid.Row="0" Grid.Column="0" Margin="10" 
                 Background="{StaticResource EditorBackgroundBrush}" 
                 BorderBrush="{StaticResource BorderBrush}" 
@@ -57,9 +59,9 @@
                         <Grid HorizontalAlignment="Left" VerticalAlignment="Top">
 
                             <Image x:Name="TargetImage"
-       RenderOptions.BitmapScalingMode="NearestNeighbor"
-       Source="{Binding ImagePath, Converter={StaticResource PathToBitmapConverter}}" 
-       Stretch="None">
+                                   RenderOptions.BitmapScalingMode="NearestNeighbor"
+                                   Source="{Binding ImagePath, Converter={StaticResource PathToBitmapConverter}}" 
+                                   Stretch="None">
                                 <i:Interaction.Triggers>
                                     <i:EventTrigger EventName="SizeChanged">
                                         <i:InvokeCommandAction Command="{Binding UpdateRenderedBoundsCommand}" PassEventArgsToCommand="True"/>
@@ -127,60 +129,58 @@
                 </ScrollViewer>
             </Grid>
         </Border>
-        <!-- 1. The Terminal entire block now responds to the 'Show Terminal' CheckBox -->
+
+        <!-- Python Execution Log / Terminal -->
         <Border Grid.Row="2" Grid.Column="0" Margin="5" 
-        Background="{StaticResource EditorBackgroundBrush}" 
-        BorderBrush="{StaticResource BorderBrush}" 
-        BorderThickness="1" 
-        CornerRadius="6"
-        Visibility="{Binding IsTerminalVisible, Converter={StaticResource BoolToVisConverter}}">
+                Background="{StaticResource EditorBackgroundBrush}" 
+                BorderBrush="{StaticResource BorderBrush}" 
+                BorderThickness="1" 
+                CornerRadius="6"
+                Visibility="{Binding IsTerminalVisible, Converter={StaticResource BoolToVisConverter}}">
 
             <Grid Margin="10,5,10,5">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
-                    <!-- Row for the ProgressBar line -->
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
 
                 <TextBlock Grid.Row="0" Text="Python API Execution Log" Style="{StaticResource SubHeaderTextStyle}" Margin="0,0,0,5"/>
 
-                <!-- 2. The Progress Bar Line: Positioned right above the terminal log -->
-                <!-- Styled to be a medium line (Height=5), balanced and modern -->
                 <ProgressBar Grid.Row="1" 
-                     Height="5" 
-                     Margin="0,2,0,6"
-                     Minimum="0" 
-                     Maximum="100" 
-                     Value="{Binding ProgressValue}"
-                     Foreground="#38BDF8" 
-                     Background="#1E293B" 
-                     BorderThickness="0"
-                     Visibility="{Binding IsProgressBarVisible, Converter={StaticResource BoolToVisConverter}}"/>
+                             Height="5" 
+                             Margin="0,2,0,6"
+                             Minimum="0" 
+                             Maximum="100" 
+                             Value="{Binding ProgressValue}"
+                             Foreground="#38BDF8" 
+                             Background="#1E293B" 
+                             BorderThickness="0"
+                             Visibility="{Binding IsProgressBarVisible, Converter={StaticResource BoolToVisConverter}}"/>
 
                 <ListBox Grid.Row="2" 
-                 ItemsSource="{Binding ExecutionLog}" 
-                 Style="{StaticResource TerminalListBoxStyle}"
-                 VirtualizingStackPanel.IsVirtualizing="True"
-                 VirtualizingStackPanel.VirtualizationMode="Recycling"
-                 ScrollViewer.CanContentScroll="True"
-                 helpers:ListBoxBehavior.AutoScrollToBottom="True"/>
+                         ItemsSource="{Binding ExecutionLog}" 
+                         Style="{StaticResource TerminalListBoxStyle}"
+                         VirtualizingStackPanel.IsVirtualizing="True"
+                         VirtualizingStackPanel.VirtualizationMode="Recycling"
+                         ScrollViewer.CanContentScroll="True"
+                         helpers:ListBoxBehavior.AutoScrollToBottom="True"/>
             </Grid>
         </Border>
 
-
-        <GridSplitter Grid.Column="1" Width="4" HorizontalAlignment="Stretch" 
+        <GridSplitter Grid.Column="1" Grid.RowSpan="3" Width="4" HorizontalAlignment="Stretch" 
                       Background="{StaticResource SplitterBrush}"/>
 
-        <Grid Grid.Column="2" Grid.RowSpan="3" Margin="15">
+        <!-- Config Control Sidebar -->
+        <Grid Grid.Column="2" Grid.RowSpan="3" Margin="10">
             <Grid.RowDefinitions>
                 <RowDefinition Height="*" />
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
-            <StackPanel Grid.Row="0">
-                <StackPanel>
-
+            <!-- ScrollViewer guarantees all controls are reachable even on small height screens -->
+            <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                <StackPanel Margin="0,0,5,0">
                     <StackPanel Margin="0,0,0,15" Orientation="Horizontal">
                         <ContentControl Content="{StaticResource ImageScanIcon}" Width="20" Height="20" Margin="0,0,8,0"/>
                         <TextBlock Text="PIPELINE CONFIGURATION" Style="{StaticResource HeaderTextStyle}"/>
@@ -195,22 +195,17 @@
                         <StackPanel>
                             <TextBlock Text="Selection Outline Control" Style="{StaticResource SubHeaderTextStyle}" Margin="0,0,0,10"/>
 
-                            <Grid Margin="0,0,0,12">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="*" />
-                                </Grid.ColumnDefinitions>
-                                <RadioButton Grid.Column="0" Content="Rectangle Box"
+                            <UniformGrid Columns="3" Margin="0,0,0,12">
+                                <RadioButton Content="Rectangle"
                                              IsChecked="{Binding IsRectangleMode, Mode=TwoWay}"
                                              Foreground="White" VerticalAlignment="Center"/>
-                                <RadioButton Grid.Column="1" Content="Polygon Shape"
+                                <RadioButton Content="Polygon"
                                              IsChecked="{Binding IsPolygonMode, Mode=TwoWay}"
                                              Foreground="White" VerticalAlignment="Center"/>
-                                <RadioButton Grid.Column="2" Content="Freehand Draw"
+                                <RadioButton Content="Freehand"
                                              IsChecked="{Binding IsFreehandMode, Mode=TwoWay}"
                                              Foreground="White" VerticalAlignment="Center"/>
-                            </Grid>
+                            </UniformGrid>
 
                             <Border Background="#EF4444" CornerRadius="4" Height="28">
                                 <Button Content="Clear/Remove Shape"
@@ -241,118 +236,88 @@
                                 </Button>
                             </Border>
                         </StackPanel>
-                        
                     </Border>
+
                     <Border Style="{StaticResource CardPanelStyle}" Margin="0,0,0,15">
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-                        <StackPanel>
-                            <TextBlock Text="UI Display Toggles" Style="{StaticResource SubHeaderTextStyle}" Margin="0,0,0,10"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="UI Display Toggles" Style="{StaticResource SubHeaderTextStyle}" Margin="0,0,0,10"/>
 
-                            <StackPanel  Orientation="Vertical">
-                                <!-- Show Terminal Control (Checked by default) -->
-                                <!-- Show Terminal Control -->
-                                <CheckBox Content="Show Terminal Log" 
-          IsChecked="{Binding IsTerminalVisible, Mode=TwoWay}" 
-          Foreground="White" 
-          Margin="0,0,0,10"
-          Cursor="Hand"/>
+                                <StackPanel Orientation="Vertical">
+                                    <CheckBox Content="Show Terminal Log" 
+                                              IsChecked="{Binding IsTerminalVisible, Mode=TwoWay}" 
+                                              Foreground="White" 
+                                              Margin="0,0,0,10"
+                                              Cursor="Hand"/>
 
-                                <!-- Show Progress Bar Control (Only visible if Terminal is visible) -->
-                                <CheckBox Content="Show Progress Bar" 
-          IsChecked="{Binding IsProgressBarVisible, Mode=TwoWay}" 
-          Foreground="White" 
-          Cursor="Hand"
-          Visibility="{Binding IsTerminalVisible, Converter={StaticResource BoolToVisConverter}}"/>
-
+                                    <CheckBox Content="Show Progress Bar" 
+                                              IsChecked="{Binding IsProgressBarVisible, Mode=TwoWay}" 
+                                              Foreground="White" 
+                                              Cursor="Hand"
+                                              Visibility="{Binding IsTerminalVisible, Converter={StaticResource BoolToVisConverter}}"/>
+                                </StackPanel>
                             </StackPanel>
-                                                  
+
+                            <StackPanel Grid.Column="1" Margin="10,0,0,0">
+                                <TextBlock Text="Processing Device" 
+                                           Foreground="{StaticResource MutedTextBrush}" 
+                                           Style="{StaticResource SubHeaderTextStyle}" 
+                                           Margin="0,0,0,5"/>
+
+                                <ComboBox SelectedIndex="{Binding SelectedDevice}"
+                                          Style="{StaticResource DarkComboBoxStyle}">
+                                    <ComboBoxItem Content="CPU Mode" />
+                                    <ComboBoxItem Content="GPU (CUDA)" IsEnabled="{Binding IsGpuSupported}" />
+                                    <ComboBoxItem Content="Auto" />
+                                </ComboBox>
                             </StackPanel>
-                            <StackPanel Grid.Column="1" Margin="0,0,0,15">
-    <TextBlock Text="Processing Device" 
-               Foreground="{StaticResource MutedTextBrush}" 
-               Style="{StaticResource SubHeaderTextStyle}" 
-               Margin="0,0,0,5"/>
-               
-    <!-- Applied Style Here -->
-    <ComboBox SelectedIndex="{Binding SelectedDevice}"
-              Style="{StaticResource DarkComboBoxStyle}">
-        <ComboBoxItem Content="CPU Mode" />
-        <ComboBoxItem Content="GPU (CUDA Required)" IsEnabled="{Binding IsGpuSupported}" />
-        <ComboBoxItem Content="Auto" />
-    </ComboBox>
-</StackPanel>
                         </Grid>
                     </Border>
+
                     <Border Style="{StaticResource CardPanelStyle}" Margin="0,0,0,15">
-                       
-                        <StackPanel Grid.Column="0">
+                        <StackPanel>
                             <TextBlock Text="Selected Region Intensities" Style="{StaticResource SubHeaderTextStyle}" Margin="0,0,0,10"/>
 
                             <StackPanel Margin="0,0,0,10">
                                 <TextBlock Text="Preview Images to Return" 
-                       Foreground="{StaticResource MutedTextBrush}" 
-                       Style="{StaticResource BodyTextStyle}" 
-                       Margin="0,0,0,4"/>
+                                           Foreground="{StaticResource MutedTextBrush}" 
+                                           Style="{StaticResource BodyTextStyle}" 
+                                           Margin="0,0,0,4"/>
                                 <TextBox Text="{Binding PreviewCount, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                     Background="#1E293B" Foreground="White" BorderBrush="{StaticResource BorderBrush}"
-                     Padding="5" Height="30" VerticalContentAlignment="Center"/>
+                                         Background="#1E293B" Foreground="White" BorderBrush="{StaticResource BorderBrush}"
+                                         Padding="5" Height="30" VerticalContentAlignment="Center"/>
                             </StackPanel>
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="*" />
-                                </Grid.ColumnDefinitions>
-                                <Button Grid.Column="0" Content="Scan Target Region"
-                Command="{Binding SendImageCommand}"
-                Style="{StaticResource AccentButtonStyle}"
-                Margin="0,0,5,15" Height="40"/>
-                            <Button Grid.Column="1" Content="Abort / Cancel Operation"
-        Command="{Binding AbortProcessingCommand}"
-        Style="{StaticResource AbortButtonStyle}"
-        Height="40" 
-        Margin="5,0,0,15"/>
-                            </Grid>
 
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="*" />
-                                </Grid.ColumnDefinitions>
+                            <UniformGrid Columns="2" Margin="0,0,0,15">
+                                <Button Content="Scan Region"
+                                        Command="{Binding SendImageCommand}"
+                                        Style="{StaticResource AccentButtonStyle}"
+                                        Margin="0,0,4,0" Height="40"/>
+                                <Button Content="Abort / Cancel"
+                                        Command="{Binding AbortProcessingCommand}"
+                                        Style="{StaticResource AbortButtonStyle}"
+                                        Margin="4,0,0,0" Height="40"/>
+                            </UniformGrid>
 
-                                <!-- Min Value Input -->
-                                <StackPanel Grid.Column="0" Margin="5,0,5,0">
+                            <UniformGrid Columns="2">
+                                <StackPanel Margin="2,0,2,0">
                                     <TextBlock Text="Min Value" Foreground="{StaticResource MutedTextBrush}" Style="{StaticResource BodyTextStyle}" HorizontalAlignment="Center" Margin="0,0,0,4"/>
                                     <TextBox Text="{Binding SelectedMinIntensity, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                 Background="#1E293B" 
-                 Foreground="#38BDF8" 
-                 BorderBrush="{StaticResource BorderBrush}"
-                 FontSize="16" 
-                 FontWeight="Bold"
-                 TextAlignment="Center"
-                 Padding="4" 
-                 Height="32" 
-                 VerticalContentAlignment="Center"/>
+                                             Background="#1E293B" Foreground="#38BDF8" BorderBrush="{StaticResource BorderBrush}"
+                                             FontSize="16" FontWeight="Bold" TextAlignment="Center" Padding="4" Height="32" VerticalContentAlignment="Center"/>
                                 </StackPanel>
 
-                                <!-- Max Value Input -->
-                                <StackPanel Grid.Column="1" Margin="5,0,5,0">
+                                <StackPanel Margin="2,0,2,0">
                                     <TextBlock Text="Max Value" Foreground="{StaticResource MutedTextBrush}" Style="{StaticResource BodyTextStyle}" HorizontalAlignment="Center" Margin="0,0,0,4"/>
                                     <TextBox Text="{Binding SelectedMaxIntensity, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                 Background="#1E293B" 
-                 Foreground="#F43F5E" 
-                 BorderBrush="{StaticResource BorderBrush}"
-                 FontSize="16" 
-                 FontWeight="Bold"
-                 TextAlignment="Center"
-                 Padding="4" 
-                 Height="32" 
-                 VerticalContentAlignment="Center"/>
+                                             Background="#1E293B" Foreground="#F43F5E" BorderBrush="{StaticResource BorderBrush}"
+                                             FontSize="16" FontWeight="Bold" TextAlignment="Center" Padding="4" Height="32" VerticalContentAlignment="Center"/>
                                 </StackPanel>
-                            </Grid>
+                            </UniformGrid>
                         </StackPanel>
                     </Border>
 
@@ -360,51 +325,43 @@
                         <StackPanel>
                             <TextBlock Text="Geometric Imaging Parameters" Style="{StaticResource SubHeaderTextStyle}" Margin="0,0,0,10"/>
 
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="*"/>
-                                </Grid.ColumnDefinitions>
-
-                                <StackPanel Grid.Column="0" Margin="4,0,4,0">
+                            <UniformGrid Columns="3">
+                                <StackPanel Margin="2,0,2,0">
                                     <TextBlock Text="FOD (mm)" Foreground="{StaticResource MutedTextBrush}" Style="{StaticResource BodyTextStyle}" Margin="0,0,0,4"/>
-                                    <TextBox Text="{Binding FodValue, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged,Converter={StaticResource DecimalConverter}}"
+                                    <TextBox Text="{Binding FodValue, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, Converter={StaticResource DecimalConverter}}"
                                              Background="#1E293B" Foreground="White" BorderBrush="{StaticResource BorderBrush}"
                                              Padding="5" Height="30" VerticalContentAlignment="Center"/>
                                 </StackPanel>
 
-                                <StackPanel Grid.Column="1" Margin="4,0,4,0">
+                                <StackPanel Margin="2,0,2,0">
                                     <TextBlock Text="FDD (mm)" Foreground="{StaticResource MutedTextBrush}" Style="{StaticResource BodyTextStyle}" Margin="0,0,0,4"/>
-                                    <TextBox Text="{Binding FddValue, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged,Converter={StaticResource DecimalConverter}}"
+                                    <TextBox Text="{Binding FddValue, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, Converter={StaticResource DecimalConverter}}"
                                              Background="#1E293B" Foreground="White" BorderBrush="{StaticResource BorderBrush}"
                                              Padding="5" Height="30" VerticalContentAlignment="Center"/>
                                 </StackPanel>
 
-                                <StackPanel Grid.Column="2" Margin="4,0,4,0">
-                                    <TextBlock Text="Pixel Size (µm)" Foreground="{StaticResource MutedTextBrush}" Style="{StaticResource BodyTextStyle}" Margin="0,0,0,4"/>
-                                    <TextBox Text="{Binding DetectorPixelSize, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged,Converter={StaticResource DecimalConverter}}"
+                                <StackPanel Margin="2,0,2,0">
+                                    <TextBlock Text="Pixel (µm)" Foreground="{StaticResource MutedTextBrush}" Style="{StaticResource BodyTextStyle}" Margin="0,0,0,4"/>
+                                    <TextBox Text="{Binding DetectorPixelSize, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, Converter={StaticResource DecimalConverter}}"
                                              Background="#1E293B" Foreground="White" BorderBrush="{StaticResource BorderBrush}"
                                              Padding="5" Height="30" VerticalContentAlignment="Center"/>
                                 </StackPanel>
-                            </Grid>
+                            </UniformGrid>
 
                             <TextBlock Text="{Binding CalculatedResolutionMessage}"
                                        Foreground="#38BDF8" Style="{StaticResource BodyTextStyle}"
-                                       Margin="4,10,0,0" FontWeight="SemiBold"/>
+                                       Margin="4,10,0,0" FontWeight="SemiBold" TextWrapping="Wrap"/>
 
                             <TextBlock Text="{Binding CalculatedVolumeMessage}"
                                        Foreground="#34D399" Style="{StaticResource BodyTextStyle}"
-                                       Margin="4,4,0,0" FontWeight="SemiBold"/>
+                                       Margin="4,4,0,0" FontWeight="SemiBold" TextWrapping="Wrap"/>
                         </StackPanel>
-                        
                     </Border>
-
                 </StackPanel>
-            </StackPanel>
-            
+            </ScrollViewer>
 
-            <Border Grid.Row="1" Style="{StaticResource StatusPanelStyle}" Margin="0,15,0,0">
+            <!-- Bottom Status Indicator Bar -->
+            <Border Grid.Row="1" Style="{StaticResource StatusPanelStyle}" Margin="0,10,0,0">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"/>
@@ -414,8 +371,6 @@
                     <TextBlock Grid.Column="1" Text="{Binding CurrentStatusMessage}" TextTrimming="CharacterEllipsis" Style="{StaticResource BodyTextStyle}"/>
                 </Grid>
             </Border>
-            
         </Grid>
-        
     </Grid>
 </Window>
