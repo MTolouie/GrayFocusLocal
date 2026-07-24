@@ -83,7 +83,7 @@ namespace Wpf.ViewModels
                 var bitmap = BitmapSource.Create(
                     data.Width, data.Height,
                     96, 96,
-                    PixelFormats.Bgr48,
+                    PixelFormats.Rgb48,
                     null,
                     data.PixelData,
                     data.Stride);

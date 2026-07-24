@@ -221,6 +221,28 @@ namespace Wpf.ViewModels
         partial void OnFddValueChanged(double value) => RecalculateObjectResolution();
         partial void OnDetectorPixelSizeChanged(double value) => RecalculateObjectResolution();
 
+        partial void OnSelectedMinIntensityChanged(int value)
+        {
+            if (value != 0) MetaDataMinValue = value;
+        }
+
+        partial void OnSelectedMaxIntensityChanged(int value)
+        {
+            if (value != 0) MetaDataMaxValue = value;
+        }
+
+        partial void OnMinValueChanged(int value)
+        {
+            // If no ROI selection is active, fallback to MinValue
+            if (SelectedMinIntensity == 0) MetaDataMinValue = value;
+        }
+
+        partial void OnMaxValueChanged(int value)
+        {
+            // If no ROI selection is active, fallback to MaxValue
+            if (SelectedMaxIntensity == 0) MetaDataMaxValue = value;
+        }
+
         public MainViewModel(
             IImageProcessingService processingService,
             IRoiProcessorService roiProcessorService,
