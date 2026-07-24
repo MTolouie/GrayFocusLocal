@@ -7,6 +7,6 @@ namespace Wpf.Services.IService
 {
     public interface IResultWindowFactory
     {
-        public ResultWindow Create(List<(string SessionId, string PreviewId)> previewRefs);
+        public ResultWindow Create(BatchMetadataDTO previewRefs);
     }
 }

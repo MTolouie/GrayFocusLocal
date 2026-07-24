@@ -32,17 +32,18 @@ namespace Wpf.ViewModels
         public ObservableCollection<PreviewImageItem> Items { get; } = new();
 
         [ObservableProperty] private PreviewImageItem? _hoveredItem;
+        private readonly BatchMetadataDTO _metadata;
 
-        
 
 
-        public ResultViewModel(
-    List<(string SessionId, string PreviewId)> previewRefs,
+
+        public ResultViewModel(BatchMetadataDTO metadata,
     IImageProcessingService processingService)
         {
             _processingService = processingService;
+            _metadata = metadata;
 
-            foreach (var (sessionId, previewId) in previewRefs)
+            foreach (var (sessionId, previewId) in metadata.PreviewRefs)
             {
                 // FIXED: Instead of mapping the previewId to the UI label, map the exact file name
                 var item = new PreviewImageItem(sessionId, previewId)
@@ -231,28 +232,26 @@ namespace Wpf.ViewModels
         {
             try
             {
-
-                // 1. Open the Folder Picker Dialog
+                // 1. Open Folder Picker
                 var dialog = new Microsoft.Win32.OpenFolderDialog
                 {
-                    Title = "Select Destination Folder for Processed Images",
+                    Title = "Select Destination Folder for Processed Images & Metadata",
                     Multiselect = false
                 };
 
-                // Show dialog and check if the user selected a folder
                 bool? result = dialog.ShowDialog();
                 if (result != true || string.IsNullOrWhiteSpace(dialog.FolderName))
                 {
-                    return; // User canceled the dialog
+                    return;
                 }
 
                 string outputDir = dialog.FolderName;
 
-
                 int saved = 0;
                 int skipped = 0;
+                var savedImageNames = new List<string>();
 
-                // 2. Save images on a background thread
+                // 2. Save all images concurrently/sequentially
                 await Task.Run(() =>
                 {
                     foreach (var item in Items)
@@ -267,32 +266,77 @@ namespace Wpf.ViewModels
                             ? item.PreviewId
                             : Path.GetFileNameWithoutExtension(item.Label);
 
-                        // Construct initial file path
-                        string filePath = Path.Combine(outputDir, $"{safeName}.png");
+                        string imagePath = Path.Combine(outputDir, $"{safeName}.png");
 
-                        // Prevent overwriting existing files by appending a counter
+                        // Collision prevention for duplicate filenames
                         int counter = 1;
-                        while (File.Exists(filePath))
+                        while (File.Exists(imagePath))
                         {
-                            filePath = Path.Combine(outputDir, $"{safeName}_{counter++}.png");
+                            string numberedName = $"{safeName}_{counter++}";
+                            imagePath = Path.Combine(outputDir, $"{numberedName}.png");
                         }
 
+                        // Save PNG
                         var encoder = new PngBitmapEncoder();
                         encoder.Frames.Add(BitmapFrame.Create(bitmap));
+                        using (var fs = new FileStream(imagePath, FileMode.Create, FileAccess.Write))
+                        {
+                            encoder.Save(fs);
+                        }
 
-                        using var fs = new FileStream(filePath, FileMode.Create, FileAccess.Write);
-                        encoder.Save(fs);
                         saved++;
+                        savedImageNames.Add(Path.GetFileName(imagePath));
+                    }
+
+                    // 3. Create ONE single metadata report text file for the entire batch
+                    if (saved > 0)
+                    {
+                        string summaryTxtPath = Path.Combine(outputDir, $"batch_summary_{_metadata.SessionId[..8]}.txt");
+
+                        // Collision handling for summary text file
+                        int textCounter = 1;
+                        while (File.Exists(summaryTxtPath))
+                        {
+                            summaryTxtPath = Path.Combine(outputDir, $"batch_summary_{_metadata.SessionId[..8]}_{textCounter++}.txt");
+                        }
+
+                        var sb = new System.Text.StringBuilder();
+                        sb.AppendLine("==================================================");
+                        sb.AppendLine("           BATCH ANALYSIS METADATA REPORT         ");
+                        sb.AppendLine("==================================================");
+                        sb.AppendLine($"Session ID:               {_metadata.SessionId}");
+                        sb.AppendLine($"Date & Time:              {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+                        sb.AppendLine($"Saved Images Count:       {saved}");
+                        sb.AppendLine("--------------------------------------------------");
+                        sb.AppendLine("GEOMETRIC & ACQUISITION METRICS:");
+                        sb.AppendLine($"  Object Pixel Size:      {_metadata.ObjectPixelSizeMicrons.ToString("F4", System.Globalization.CultureInfo.InvariantCulture)} µm");
+                        sb.AppendLine($"  Magnification:          {_metadata.Magnification.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)}x");
+                        sb.AppendLine($"  FOD (Focus-Object):     {_metadata.FodValue.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)} mm");
+                        sb.AppendLine($"  FDD (Focus-Detector):   {_metadata.FddValue.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)} mm");
+                        sb.AppendLine($"  Total Pixel Range:      {_metadata.TotalPixelInRange.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)}");
+                        sb.AppendLine("--------------------------------------------------");
+                        sb.AppendLine("INTENSITY CUTOFF THRESHOLDS:");
+                        sb.AppendLine($"  Min Value Cutoff:       {_metadata.MinValue}");
+                        sb.AppendLine($"  Max Value Cutoff:       {_metadata.MaxValue}");
+                        sb.AppendLine("--------------------------------------------------");
+                        sb.AppendLine("INCLUDED IMAGE FILES:");
+                        foreach (var fileName in savedImageNames)
+                        {
+                            sb.AppendLine($"  - {fileName}");
+                        }
+                        sb.AppendLine("==================================================");
+
+                        File.WriteAllText(summaryTxtPath, sb.ToString());
                     }
                 });
 
                 MessageBox.Show(
-                    $"Saved {saved} image(s) to:\n{outputDir}" + (skipped > 0 ? $"\n({skipped} not yet loaded, skipped)" : ""),
+                    $"Saved {saved} image(s) and 1 batch summary .txt report to:\n{outputDir}" + (skipped > 0 ? $"\n({skipped} not yet loaded, skipped)" : ""),
                     "Save Complete", MessageBoxButton.OK, MessageBoxImage.Information);
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Failed to save images: {ex.Message}", "Save Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show($"Failed to save images or metadata summary: {ex.Message}", "Save Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 

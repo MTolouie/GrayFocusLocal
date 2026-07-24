@@ -26,7 +26,7 @@
                Style="{StaticResource HeaderTextStyle}" 
                HorizontalAlignment="Center"/>
 
-            <Button Content="Save The Images"
+            <Button Content="Save The Analysis"
         DockPanel.Dock="Right"
         HorizontalAlignment="Right"
         Style="{StaticResource AccentButtonStyle}"

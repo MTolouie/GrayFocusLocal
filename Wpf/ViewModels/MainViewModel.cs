@@ -182,6 +182,10 @@ namespace Wpf.ViewModels
                 }
             }
         }
+
+        private int MetaDataMinValue { get; set; } = 0;
+        private int MetaDataMaxValue { get; set; } = 0;
+
         public void SetGpuSupport(bool gpuSupported)
         {
             IsGpuSupported = gpuSupported;
@@ -747,6 +751,8 @@ namespace Wpf.ViewModels
 
                 SelectedMinIntensity = _currentRoiResult.MinValue;
                 SelectedMaxIntensity = _currentRoiResult.MaxValue;
+                MetaDataMaxValue = _currentRoiResult.MaxValue;
+                MetaDataMinValue = _currentRoiResult.MinValue;
                 CurrentStatusMessage = "Analysis complete.";
             }
             else if (IsPolygonMode && PolygonPoints != null && PolygonPoints.Count > 2)
@@ -766,6 +772,8 @@ namespace Wpf.ViewModels
 
                 SelectedMinIntensity = _currentRoiResult.MinValue;
                 SelectedMaxIntensity = _currentRoiResult.MaxValue;
+                MetaDataMaxValue = _currentRoiResult.MaxValue;
+                MetaDataMinValue = _currentRoiResult.MinValue;
                 CurrentStatusMessage = "Analysis complete.";
             }
             else if (IsFreehandMode && FreehandPoints != null && FreehandPoints.Count > 2)
@@ -785,6 +793,8 @@ namespace Wpf.ViewModels
 
                 SelectedMinIntensity = _currentRoiResult.MinValue;
                 SelectedMaxIntensity = _currentRoiResult.MaxValue;
+                MetaDataMaxValue = _currentRoiResult.MaxValue;
+                MetaDataMinValue = _currentRoiResult.MinValue;
                 CurrentStatusMessage = "Analysis complete.";
             }
         }
@@ -967,7 +977,28 @@ namespace Wpf.ViewModels
                     _processedResultsPaths.Add((sessionId, previewId));
                 }
 
-                var resultWin = _resultWindowFactory.Create(_processedResultsPaths);
+
+
+                // Prepare the Metadata DTO to pass over to ResultViewModel
+
+                var batchMetadata = new BatchMetadataDTO
+                {
+                    SessionId = sessionId,
+                    FodValue = FodValue,
+                    FddValue = FddValue,
+                    ObjectPixelSizeMicrons = ObjectPixelSizeMicrons,
+                    Magnification = Magnification,
+                    // Explicitly grab the active cutoff values
+                    MinValue = MetaDataMinValue,
+                    MaxValue = MetaDataMaxValue,
+                    PreviewRefs = _processedResultsPaths,
+                    TotalPixelInRange = TotalPixelsInRange
+                };
+
+
+
+                // Create the window with metadata (Update your Factory interface/implementation to accept BatchMetadataDTO)
+                var resultWin = _resultWindowFactory.Create(batchMetadata);
                 resultWin.Owner = System.Windows.Application.Current.MainWindow;
                 resultWin.Closed += async (s, e) =>
                 {
