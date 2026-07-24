@@ -151,10 +151,10 @@ namespace Wpf.Services
                         cropped[dstRow + x] = value;
 
                         // Rectangle mode background padding edge fix for 16-bit
-                        if (mask == null && value == (ushort)0)
-                        {
-                            continue;
-                        }
+                        //if (mask == null && value == (ushort)0)
+                        //{
+                        //    continue;
+                        //}
 
                         if (value < min) min = value;
                         if (value > max) max = value;
@@ -214,10 +214,10 @@ namespace Wpf.Services
                         cropped[dstRow + x] = value;
 
                         // Rectangle mode background padding edge fix for 8-bit
-                        if (mask == null && value == (byte)0)
-                        {
-                            continue;
-                        }
+                        //if (mask == null && value == (byte)0)
+                        //{
+                        //    continue;
+                        //}
 
                         if (value < min) min = value;
                         if (value > max) max = value;
