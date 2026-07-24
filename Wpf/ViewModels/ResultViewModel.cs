@@ -34,6 +34,8 @@ namespace Wpf.ViewModels
         [ObservableProperty] private PreviewImageItem? _hoveredItem;
         private readonly BatchMetadataDTO _metadata;
 
+        [ObservableProperty]
+        private bool _isSaving;
 
 
 
@@ -244,6 +246,7 @@ namespace Wpf.ViewModels
                 {
                     return;
                 }
+                IsSaving = true;
 
                 string outputDir = dialog.FolderName;
 
@@ -337,6 +340,10 @@ namespace Wpf.ViewModels
             catch (Exception ex)
             {
                 MessageBox.Show($"Failed to save images or metadata summary: {ex.Message}", "Save Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            finally
+            {
+                IsSaving = false;
             }
         }
 
