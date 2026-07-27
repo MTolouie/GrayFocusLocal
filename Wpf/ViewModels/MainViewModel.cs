@@ -141,6 +141,7 @@ namespace Wpf.ViewModels
         // voxels, i.e. the slice spacing equals the in-plane pixel size).
         [ObservableProperty] private long _totalPixelsInRange;
         [ObservableProperty] private string _calculatedVolumeMessage = "Total Volume: N/A";
+        private double _volumeMetaData;
 
         // How many preview images the user wants the API to send back
         [ObservableProperty] private int _previewCount = 3;
@@ -301,6 +302,7 @@ namespace Wpf.ViewModels
             double voxelVolumeCubicMicrons = Math.Pow(ObjectPixelSizeMicrons, 3);
             double totalVolumeCubicMicrons = TotalPixelsInRange * voxelVolumeCubicMicrons;
             double totalVolumeCubicMeters = totalVolumeCubicMicrons / 1000000000;
+            _volumeMetaData = totalVolumeCubicMeters;
 
             CalculatedVolumeMessage = $"Total Volume: {totalVolumeCubicMeters.ToString("F12", System.Globalization.CultureInfo.InvariantCulture)} mm³ ({TotalPixelsInRange} voxels)";
         }
@@ -1014,7 +1016,8 @@ namespace Wpf.ViewModels
                     MinValue = MetaDataMinValue,
                     MaxValue = MetaDataMaxValue,
                     PreviewRefs = _processedResultsPaths,
-                    TotalPixelInRange = TotalPixelsInRange
+                    TotalPixelInRange = TotalPixelsInRange,
+                    Volume = _volumeMetaData
                 };
 
 

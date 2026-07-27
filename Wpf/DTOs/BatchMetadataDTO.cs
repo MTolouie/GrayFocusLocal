@@ -7,6 +7,7 @@
     public double Magnification { get; set; }
     public int MinValue { get; set; }
     public int MaxValue { get; set; }
+    public double Volume { get; set; }
     public long TotalPixelInRange { get; set; }
     public List<(string SessionId, string PreviewId)> PreviewRefs { get; set; } = new();
 }

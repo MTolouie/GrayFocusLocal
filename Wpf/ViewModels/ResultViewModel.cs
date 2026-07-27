@@ -317,6 +317,7 @@ namespace Wpf.ViewModels
                         sb.AppendLine($"  FOD (Focus-Object):     {_metadata.FodValue.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)} mm");
                         sb.AppendLine($"  FDD (Focus-Detector):   {_metadata.FddValue.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)} mm");
                         sb.AppendLine($"  Total Pixel Range:      {_metadata.TotalPixelInRange.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)}");
+                        sb.AppendLine($"  Total Volume:      {_metadata.Volume.ToString("F4", System.Globalization.CultureInfo.InvariantCulture)}");
                         sb.AppendLine("--------------------------------------------------");
                         sb.AppendLine("INTENSITY CUTOFF THRESHOLDS:");
                         sb.AppendLine($"  Min Value Cutoff:       {_metadata.MinValue}");
