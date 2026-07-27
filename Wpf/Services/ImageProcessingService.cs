@@ -109,17 +109,22 @@ namespace Wpf.Services
             });
         }
 
-        public Task<PreviewImageData> GetPreviewImageAsync(string sessionId, string previewId)
+        public Task<PreviewImageData> GetPreviewImageAsync(string sessionId, string previewId, CancellationToken cancellationToken = default)
         {
             return Task.Run(() =>
             {
+                // Throw if cancellation was requested before acquiring the Python GIL
+                cancellationToken.ThrowIfCancellationRequested();
+
                 using (Py.GIL())
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
+
                     dynamic img = _engine.Processor.get_image(sessionId, previewId);
 
                     int height = (int)img.shape[0];
                     int width = (int)img.shape[1];
-                    int channels = (int)img.shape[2]; // 3 (now RGB order)
+                    int channels = (int)img.shape[2]; // 3 (RGB)
 
                     int bytesPerPixel = 2 * channels; // 6 for 16-bit RGB
                     int stride = width * bytesPerPixel;
@@ -135,7 +140,7 @@ namespace Wpf.Services
                         Stride = stride
                     };
                 }
-            });
+            }, cancellationToken);
         }
 
         /// <summary>

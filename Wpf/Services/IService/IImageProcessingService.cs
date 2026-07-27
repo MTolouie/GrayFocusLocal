@@ -17,7 +17,7 @@ namespace Wpf.Services.IService
     {
         Task<ResponseDTO> SendDataAsync(ScanRequestDTO request);
 
-        Task<PreviewImageData> GetPreviewImageAsync(string sessionId, string previewId);
+        Task<PreviewImageData> GetPreviewImageAsync(string sessionId, string previewId, CancellationToken cancellationToken = default);
 
         Task CleanUpDataAsync(string sessionId);
 

@@ -33,6 +33,8 @@ namespace Wpf.ViewModels
 
         [ObservableProperty] private PreviewImageItem? _hoveredItem;
         private readonly BatchMetadataDTO _metadata;
+        // Cancellation token source to halt fetches when the window closes
+        private readonly CancellationTokenSource _cts = new();
 
         [ObservableProperty]
         private bool _isSaving;
@@ -71,6 +73,10 @@ namespace Wpf.ViewModels
             {
                 foreach (var item in Items)
                 {
+                    // Check if cancellation was requested before starting the next image
+                    if (_cts.IsCancellationRequested)
+                        break;
+
                     await LoadSingleImageAsync(item);
                 }
             });
@@ -81,6 +87,10 @@ namespace Wpf.ViewModels
             try
             {
                 var data = await _processingService.GetPreviewImageAsync(item.SessionId, item.PreviewId);
+
+                // Re-check cancellation in case it was triggered while waiting on Python execution
+                if (_cts.IsCancellationRequested)
+                    return;
 
                 var bitmap = BitmapSource.Create(
                     data.Width, data.Height,
@@ -99,13 +109,20 @@ namespace Wpf.ViewModels
                     item.IsLoading = false;
                 });
             }
+            catch (OperationCanceledException)
+            {
+                // Silently swallow task cancellations when the user closes the window
+            }
             catch (Exception ex)
             {
-                System.Windows.Application.Current?.Dispatcher?.Invoke(() =>
+                if (!_cts.IsCancellationRequested)
                 {
-                    item.IsLoading = false;
-                    item.ErrorMessage = $"Failed to load: {ex.Message}";
-                });
+                    System.Windows.Application.Current?.Dispatcher?.Invoke(() =>
+                    {
+                        item.IsLoading = false;
+                        item.ErrorMessage = $"Failed to load: {ex.Message}";
+                    });
+                }
             }
             finally
             {
@@ -352,6 +369,20 @@ namespace Wpf.ViewModels
         private bool CanSaveImages()
         {
             return Items.Count > 0 && Items.All(item => !item.IsLoading);
+        }
+
+        /// <summary>
+        /// Call this method when the window is closing to cancel ongoing fetches.
+        /// </summary>
+        public void CancelLoading()
+        {
+            _cts.Cancel();
+        }
+
+        public void Dispose()
+        {
+            _cts.Cancel();
+            _cts.Dispose();
         }
     }
 }
