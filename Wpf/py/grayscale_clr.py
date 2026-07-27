@@ -365,10 +365,10 @@ class GrayscaleProcessor:
             gpu_img         = cp.asarray(img)
             gpu_mask        = (gpu_img >= min_val) & (gpu_img <= max_val)
             pixels_in_range = int(cp.count_nonzero(gpu_mask))
-            # Asenkron CPU-GPU kopyalama ve bellek dökümü optimize edildi
-            mask            = cp.asnumpy(gpu_mask.view(cp.uint8) * 255)
-            del gpu_img, gpu_mask
+            # GPU verilerini henüz CPU'ya taşımıyoruz, ancak VRAM'de tutuyoruz
         else:
+            # CPU için cv2.inRange C++ seviyesinde GIL'i serbest bıraktığı için 
+            # numpy boolean işlemlerinden çok daha hızlıdır.
             mask            = cv2.inRange(img, min_val, max_val)
             pixels_in_range = int(np.count_nonzero(mask))
 
@@ -486,10 +486,18 @@ class GrayscaleProcessor:
                         if not placed and evicted_target["id"] in session["preview_images"]:
                             del session["preview_images"][evicted_target["id"]]
 
+                    # CPU'ya VRAM'den sadece keep ise indir
+                    if self.use_gpu:
+                        mask = cp.asnumpy(gpu_mask.view(cp.uint8) * 255)
+
                     # Store raw img and mask for lazy evaluation in get_image()
                     session["preview_images"][preview_id] = {"img": img, "mask": mask}
                     session["preview_slots"][actual_slot]  = {"id": preview_id, "pixels": px}
                     saved_preview_id = preview_id
+
+        # GPU belleğini temizle
+        if self.use_gpu:
+            del gpu_img, gpu_mask
 
             # ── Tamamlandı – yerel dict döndür ────────────────────────────
             result = {
