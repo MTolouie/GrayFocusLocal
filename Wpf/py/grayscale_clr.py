@@ -220,6 +220,7 @@ class GrayscaleProcessor:
     def get_image(self, session_id: str, preview_id: str) -> np.ndarray:
         """
         Belirli bir önizleme görüntüsünü 8-bit BGR numpy dizisi olarak döndürür.
+        Önizleme görüntüsü burada dinamik olarak 8-bit/16-bit BGR formatına dönüştürülür.
 
         Oturum veya önizleme kimliği bulunamazsa KeyError fırlatır;
         C# tarafında PythonException olarak yakalanır.
@@ -227,12 +228,33 @@ class GrayscaleProcessor:
         session = _sessions.get(session_id)
         if session is None:
             raise KeyError(f"'{session_id}' oturumu bulunamadı.")
-        img = session["preview_images"].get(preview_id)
-        if img is None:
+        item = session["preview_images"].get(preview_id)
+        if item is None:
             raise KeyError(
                 f"'{preview_id}' önizlemesi '{session_id}' oturumunda bulunamadı."
             )
-        return img[..., ::-1]
+
+        # Eğer zaten dönüştürülmüş bir numpy dizisiyse doğrudan döndür
+        if isinstance(item, np.ndarray):
+            return item[..., ::-1]
+
+        # Tembel (Lazy) dönüştürme: ham img ve mask'tan BGR renkli görseli üret
+        img = item["img"]
+        mask = item["mask"]
+        is_8bit = session.get("preview_bit_depth", 16) == 8
+
+        if is_8bit:
+            img_preview = (img >> 8).astype(np.uint8) if img.dtype == np.uint16 else img.astype(np.uint8)
+            img_color = cv2.cvtColor(img_preview, cv2.COLOR_GRAY2BGR)
+            img_color[mask > 0] = [0, 0, 255]
+        else:
+            img_preview = img if img.dtype == np.uint16 else img.astype(np.uint16)
+            img_color = cv2.cvtColor(img_preview, cv2.COLOR_GRAY2BGR)
+            img_color[mask > 0] = [0, 0, 65535]
+
+        # Sonucu önbelleğe al
+        session["preview_images"][preview_id] = img_color
+        return img_color[..., ::-1]
 
     def cleanup_session(self, session_id: str) -> None:
         """
@@ -343,7 +365,9 @@ class GrayscaleProcessor:
             gpu_img         = cp.asarray(img)
             gpu_mask        = (gpu_img >= min_val) & (gpu_img <= max_val)
             pixels_in_range = int(cp.count_nonzero(gpu_mask))
-            mask            = cp.asnumpy(gpu_mask.astype(cp.uint8) * 255)
+            # Asenkron CPU-GPU kopyalama ve bellek dökümü optimize edildi
+            mask            = cp.asnumpy(gpu_mask.view(cp.uint8) * 255)
+            del gpu_img, gpu_mask
         else:
             mask            = cv2.inRange(img, min_val, max_val)
             pixels_in_range = int(np.count_nonzero(mask))
@@ -445,23 +469,6 @@ class GrayscaleProcessor:
                             break
 
                 if keep:
-                    # Önizleme formatını seç
-                    is_8bit = session.get("preview_bit_depth", 16) == 8
-                    
-                    if is_8bit:
-                        # 8-bit'e dönüştür
-                        img_preview = (img >> 8).astype(np.uint8) if img.dtype == np.uint16 else img.astype(np.uint8)
-                        img_color = cv2.cvtColor(img_preview, cv2.COLOR_GRAY2BGR)
-                        img_color[mask > 0] = [0, 0, 255]
-                    else:
-                        # 16-bit olarak bırak
-                        img_preview = img.copy()
-                        if img_preview.dtype != np.uint16:
-                            img_preview = img_preview.astype(np.uint16)
-                        img_color = cv2.cvtColor(img_preview, cv2.COLOR_GRAY2BGR)
-                        # 16-bit'te kırmızı kanal maksimum değeri 65535
-                        img_color[mask > 0] = [0, 0, 65535]
-
                     preview_id = os.path.basename(image_path)
 
                     if evicted_target is not None and actual_slot == target_slot:
@@ -479,7 +486,8 @@ class GrayscaleProcessor:
                         if not placed and evicted_target["id"] in session["preview_images"]:
                             del session["preview_images"][evicted_target["id"]]
 
-                    session["preview_images"][preview_id] = img_color
+                    # Store raw img and mask for lazy evaluation in get_image()
+                    session["preview_images"][preview_id] = {"img": img, "mask": mask}
                     session["preview_slots"][actual_slot]  = {"id": preview_id, "pixels": px}
                     saved_preview_id = preview_id
 
