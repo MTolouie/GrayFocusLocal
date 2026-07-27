@@ -288,7 +288,7 @@
                                            Style="{StaticResource BodyTextStyle}" 
                                            Margin="0,0,0,4"/>
                                 <TextBox Text="{Binding PreviewCount, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                         Background="#1E293B" Foreground="White" BorderBrush="{StaticResource BorderBrush}"
+                                         Background="#1E293B" Foreground="White" Style="{StaticResource ValidatedTextBoxStyle}" BorderBrush="{StaticResource BorderBrush}"
                                          Padding="5" Height="30" VerticalContentAlignment="Center"/>
                             </StackPanel>
 

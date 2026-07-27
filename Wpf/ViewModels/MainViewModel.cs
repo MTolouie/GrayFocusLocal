@@ -4,6 +4,7 @@ using Microsoft.Win32;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.ComponentModel.DataAnnotations;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -19,7 +20,7 @@ using Wpf.Views;
 
 namespace Wpf.ViewModels
 {
-    public partial class MainViewModel : ObservableObject
+    public partial class MainViewModel : ObservableValidator
     {
         private readonly IImageProcessingService _processingService;
         private readonly IRoiProcessorService _roiProcessorService;
@@ -118,15 +119,39 @@ namespace Wpf.ViewModels
         [ObservableProperty] private double _renderedImageHeight;
 
         // --- SELECTION INTENSITY METRICS ---
-        [ObservableProperty] private int _selectedMinIntensity;
-        [ObservableProperty] private int _selectedMaxIntensity;
+        [ObservableProperty]
+        [NotifyDataErrorInfo]
+        [Range(0, int.MaxValue, ErrorMessage = "Min value cannot be negative.")]
+        private int _selectedMinIntensity;
+
+        [ObservableProperty]
+        [NotifyDataErrorInfo]
+        [Range(0, int.MaxValue, ErrorMessage = "Max value cannot be negative.")]
+        [CustomValidation(typeof(MainViewModel), nameof(ValidateMaxNotLessThanMin))]
+        private int _selectedMaxIntensity;
+
+        [ObservableProperty]
+        [NotifyDataErrorInfo]
+        [Range(1, int.MaxValue, ErrorMessage = "Preview count cannot be negative.")]
+        private int _previewCount = 3;
 
         public ObservableCollection<string> ExecutionLog { get; } = new();
 
         // --- GEOMETRIC CALCULATIONS ---
-        [ObservableProperty] private double _fodValue = 181.4; // Default example value
-        [ObservableProperty] private double _fddValue = 448.7; // Default example value
-        [ObservableProperty] private double _detectorPixelSize = 49.50; // Default 50 microns
+        [ObservableProperty]
+        [NotifyDataErrorInfo]
+        [Range(0.0001, double.MaxValue, ErrorMessage = "FOD must be greater than zero.")]
+        private double _fodValue = 181.4;
+
+        [ObservableProperty]
+        [NotifyDataErrorInfo]
+        [Range(0.0001, double.MaxValue, ErrorMessage = "FDD must be greater than zero.")]
+        private double _fddValue = 448.7;
+
+        [ObservableProperty]
+        [NotifyDataErrorInfo]
+        [Range(0.0001, double.MaxValue, ErrorMessage = "Pixel size must be greater than zero.")]
+        private double _detectorPixelSize = 49.50;
 
         [ObservableProperty] private string _calculatedResolutionMessage = "Real Resolution: N/A";
 
@@ -142,9 +167,6 @@ namespace Wpf.ViewModels
         [ObservableProperty] private long _totalPixelsInRange;
         [ObservableProperty] private string _calculatedVolumeMessage = "Total Volume: N/A";
         private double _volumeMetaData;
-
-        // How many preview images the user wants the API to send back
-        [ObservableProperty] private int _previewCount = 3;
 
         // ADD THIS LINE FOR THE PROGRESS BAR
         [ObservableProperty] private double _progressValue;
@@ -225,11 +247,21 @@ namespace Wpf.ViewModels
         partial void OnSelectedMinIntensityChanged(int value)
         {
             if (value != 0) MetaDataMinValue = value;
+            ValidateProperty(SelectedMaxIntensity, nameof(SelectedMaxIntensity));
         }
 
         partial void OnSelectedMaxIntensityChanged(int value)
         {
             if (value != 0) MetaDataMaxValue = value;
+            ValidateProperty(SelectedMaxIntensity, nameof(SelectedMaxIntensity));
+        }
+
+        public static System.ComponentModel.DataAnnotations.ValidationResult? ValidateMaxNotLessThanMin(int max, ValidationContext context)
+        {
+            var vm = (MainViewModel)context.ObjectInstance;
+            return max < vm.SelectedMinIntensity
+                ? new System.ComponentModel.DataAnnotations.ValidationResult("Max value cannot be smaller than Min value.")
+                : System.ComponentModel.DataAnnotations.ValidationResult.Success;
         }
 
         partial void OnMinValueChanged(int value)
@@ -257,7 +289,11 @@ namespace Wpf.ViewModels
             // property setters, so the OnXChanged hooks never fire at startup.
             // Run it once manually so ObjectPixelSizeMicrons isn't left at 0.
             RecalculateObjectResolution();
+
+            ErrorsChanged += (_, _) => SendImageCommand.NotifyCanExecuteChanged();
         }
+
+        private bool CanSendImage() => !HasErrors && !IsProcessing;
 
         private void RecalculateObjectResolution()
         {
@@ -824,9 +860,19 @@ namespace Wpf.ViewModels
         }
 
         // --- PIPELINE BATCH EXECUTION ---
-        [RelayCommand]
+        [RelayCommand(CanExecute = nameof(CanSendImage))]
         private async Task SendImageAsync()
         {
+            if (HasErrors)
+            {
+                ValidateAllProperties();
+                MessageBox.Show(
+                    "Please correct the highlighted fields before scanning:\n" +
+                    "Preview Count, Min/Max Value, FOD, FDD, and Pixel Size must all be valid (non-negative, and Max ≥ Min).",
+                    "Invalid Input Values", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
             if (string.IsNullOrEmpty(ImagePath))
             {
                 MessageBox.Show("No active image to process.", "Warning", MessageBoxButton.OK, MessageBoxImage.Warning);
