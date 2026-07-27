@@ -61,6 +61,18 @@ namespace Wpf.ViewModels
                     StatusMessage = "Installing required Python packages...";
                     await Task.Delay(1000);
 
+                    StatusMessage = "Checking internet connection...";
+                    bool hasInternet = await _envService.IsInternetAvailableAsync();
+
+                    if (!hasInternet)
+                    {
+                        // Set error state to trigger shutdown in App.xaml.cs
+                        HasError = true;
+                        ErrorMessage = "An internet connection is required to download missing Python packages. " +
+                                       "Please connect to the internet and restart the application.";
+                        return;
+                    }
+
                     await _envService.InstallPackagesAsync(cupyPackage, msg =>
                     {
                         StatusMessage = msg;

@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Net.Http;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
@@ -23,6 +24,21 @@ namespace Wpf.Services
             string baseDir = AppDomain.CurrentDomain.BaseDirectory;
             PyFolderPath = Path.GetFullPath(Path.Combine(baseDir, @"..\..\..\py"));
             VenvFolderPath = Path.Combine(PyFolderPath, "venv");
+        }
+
+        public async Task<bool> IsInternetAvailableAsync()
+        {
+            try
+            {
+                using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+                // Use a fast, reliable endpoint like Cloudflare's 1.1.1.1 or Google DNS
+                using var response = await client.GetAsync("https://1.1.1.1", HttpCompletionOption.ResponseHeadersRead);
+                return response.IsSuccessStatusCode;
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         public bool EnsureVenvExists()
