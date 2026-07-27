@@ -499,16 +499,16 @@ class GrayscaleProcessor:
         if self.use_gpu:
             del gpu_img, gpu_mask
 
-            # ── Tamamlandı – yerel dict döndür ────────────────────────────
-            result = {
-                "status": "completed",
-                "session_id": session_id,
-                "image_pixels_in_range": pixels_in_range,
-                "global_total_pixels": session["global_total_pixels"],
-                "saved_preview_id": saved_preview_id,  # çoğu görüntü için None
-            }
-            _output(result)
-            return result
+        # ── Tamamlandı – yerel dict döndür ────────────────────────────
+        result = {
+            "status": "completed",
+            "session_id": session_id,
+            "image_pixels_in_range": pixels_in_range,
+            "global_total_pixels": session["global_total_pixels"],
+            "saved_preview_id": saved_preview_id,  # çoğu görüntü için None
+        }
+        _output(result)
+        return result
 
     def process_images(
         self,
