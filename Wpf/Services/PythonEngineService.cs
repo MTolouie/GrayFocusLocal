@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Linq;
 using Python.Runtime;
@@ -31,15 +31,30 @@ namespace Wpf.Services
             if (_isInitialized) return;
 
             string baseDir = AppDomain.CurrentDomain.BaseDirectory;
-            string pyFolderPath = Path.GetFullPath(Path.Combine(baseDir, @"..\..\..\py"));
-            string venvPath = Path.Combine(pyFolderPath, "venv");
+            // Destek: Hem geliştirme ortamı (..\..\..\py) hem de yayınlanmış (publish) sürüm (.\py)
+            string pyFolderPath = Directory.Exists(Path.Combine(baseDir, "py"))
+                ? Path.GetFullPath(Path.Combine(baseDir, "py"))
+                : Path.GetFullPath(Path.Combine(baseDir, @"..\..\..\py"));
 
-            string basePythonHome = ResolveBasePythonHome(venvPath);
+            string embeddedPythonPath = Path.Combine(pyFolderPath, "python-runtime", "python-3.13.14-embed-amd64");
+            string basePythonHome;
 
-            if (string.IsNullOrEmpty(basePythonHome) || !Directory.Exists(basePythonHome))
+            // 1. Öncelik: Gömülü (Embedded) Python
+            if (Directory.Exists(embeddedPythonPath))
             {
-                throw new DirectoryNotFoundException(
-                    $"Could not parse the base Python installation directory from: {Path.Combine(venvPath, "pyvenv.cfg")}.");
+                basePythonHome = embeddedPythonPath;
+            }
+            // 2. Öncelik: Sanal Ortam (venv) üzerinden sistemdeki Python (Eski yöntem)
+            else
+            {
+                string venvPath = Path.Combine(pyFolderPath, "venv");
+                basePythonHome = ResolveBasePythonHome(venvPath);
+
+                if (string.IsNullOrEmpty(basePythonHome) || !Directory.Exists(basePythonHome))
+                {
+                    throw new DirectoryNotFoundException(
+                        $"Could not parse the base Python installation directory from: {Path.Combine(venvPath, "pyvenv.cfg")} and no embedded Python was found at {embeddedPythonPath}.");
+                }
             }
 
             string pythonDll = FindPythonDll(basePythonHome);
