@@ -36,6 +36,7 @@ namespace Wpf.Services
                 ? Path.GetFullPath(Path.Combine(baseDir, "py"))
                 : Path.GetFullPath(Path.Combine(baseDir, @"..\..\..\py"));
 
+            string venvPath = Path.Combine(pyFolderPath, "venv");
             string embeddedPythonPath = Path.Combine(pyFolderPath, "python-runtime", "python-3.13.14-embed-amd64");
             string basePythonHome;
 
@@ -47,7 +48,6 @@ namespace Wpf.Services
             // 2. Öncelik: Sanal Ortam (venv) üzerinden sistemdeki Python (Eski yöntem)
             else
             {
-                string venvPath = Path.Combine(pyFolderPath, "venv");
                 basePythonHome = ResolveBasePythonHome(venvPath);
 
                 if (string.IsNullOrEmpty(basePythonHome) || !Directory.Exists(basePythonHome))
